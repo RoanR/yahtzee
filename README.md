@@ -4,17 +4,18 @@
 
 Roll dice. Forge your set. Descend the dungeon.
 
-**Dungeon Dice** is a roguelite inspired by Balatro and Slay the Spire, played entirely in the terminal. Instead of poker hands or playing cards, your weapon is a set of Yahtzee dice. Each floor of the dungeon is a series of score-based challenges: roll five dice, hold what you want, and re-roll up to twice more. Hit the target score to earn gold and press on; fail and you lose HP. Die and the run ends.
+**Dungeon Dice** is a roguelite inspired by Balatro and Slay the Spire, played entirely in the terminal. Instead of poker hands or playing cards, your weapon is a set of Yahtzee dice. Each floor of the dungeon is a series of score-based challenges: roll five dice, hold what you want, and re-roll up to twice more. After your final roll, the game automatically scores your best available combination. Hit the target score to earn gold and press on; fail and you lose HP. Die and the run ends.
 
-The twist: you start knowing only the **Chance** scoring category (sum all dice, no bonus). Defeating floor bosses unlocks new scoring categories (Full House, Straights, Yahtzee), dramatically expanding what combos are worth. Collect relics that bend the rules, and upgrade your actual dice (swap faces, add enchantments, replace standard d6s with special dice) to craft a set that builds toward devastating combos. How far into the dungeon can you descend?
+Your decisions are entirely about which dice to hold. The game scores the best combination it can from your unlocked categories — so the strategic depth comes from learning which dice to keep to maximise what your current category set can score. Defeating floor bosses unlocks new scoring categories (Full House, Straights, Yahtzee), dramatically expanding what combos are possible. Collect relics that bend the rules and upgrade your actual dice to craft a set aimed at the combos your unlocked categories reward. How far into the dungeon can you descend?
 
 ---
 
 ## Core Loop
 
 ```
-Enter Room → Roll Dice (up to 3 times, hold any dice) → Score with a category
-→ Hit target: earn gold → Miss target: lose 10 HP → HP = 0: Run over
+Enter Room → Roll Dice (up to 3 times, hold any dice)
+→ Game scores best available combination → Hit target: earn gold
+→ Miss target: lose 10 HP → HP = 0: Run over
 ```
 
 Each run starts with:
@@ -41,27 +42,26 @@ Each floor has **3 rooms** followed by a **boss room**:
 
 ## Scoring Categories
 
-Unlocked by defeating floor bosses. You start knowing only Chance.
+After your final roll, the game evaluates your dice against every unlocked category and applies the highest-scoring result. New categories are unlocked by defeating floor bosses, progressively increasing the ceiling of what a roll can score.
+
+Each category can only be matched once per room — so if your dice already scored Full House this room, the game won't score it again; it moves on to the next best option.
 
 | Category        | Unlocked At    | Score Rule                                                |
 |-----------------|----------------|-----------------------------------------------------------|
 | Chance          | Start          | Sum of all dice                                           |
-| Upper Section   | Floor 1 Boss   | Sum of all dice showing the chosen face (e.g., all 5s)   |
-| Pair            | Floor 2 Boss   | Sum of the matching pair                                  |
+| Upper Section   | Floor 1 Boss   | Sum of all dice showing the best single face              |
 | Three of a Kind | Floor 2 Boss   | Sum of all dice if 3+ match                               |
-| Full House      | Floor 3 Boss   | 25 pts (three of one + two of another)                    |
-| Four of a Kind  | Floor 3 Boss   | Sum of all dice if 4+ match                               |
-| Small Straight  | Floor 4 Boss   | 30 pts (4 sequential dice)                                |
-| Large Straight  | Floor 4 Boss   | 40 pts (5 sequential dice)                                |
-| Yahtzee         | Floor 5 Boss   | 50 pts (all five dice the same) + escalating bonus        |
-
-Categories are spent per room; you cannot reuse the same category twice in one room.
+| Four of a Kind  | Floor 2 Boss   | Sum of all dice if 4+ match                               |
+| Full House      | Floor 3 Boss   | 25 pts + sum of matched dice (three of one, two of another)|
+| Small Straight  | Floor 4 Boss   | 30 pts + sum (4 sequential dice)                          |
+| Large Straight  | Floor 4 Boss   | 40 pts + sum (5 sequential dice)                          |
+| Yahtzee         | Floor 5 Boss   | 100 pts + sum of all dice (all five the same)             |
 
 ---
 
 ## Boss Encounters
 
-Each boss applies a **debuff** at the start of the fight and has a **weakness category** that deals 1.5× progress when scored.
+Each boss applies a **debuff** at the start of the fight and has a **weakness category**. If the game's auto-scored result uses that category, it counts for 1.5× progress toward the target — so rolling dice that favour the weakness is rewarded.
 
 | Floor | Boss         | Weakness        | Debuff                                          |
 |-------|--------------|-----------------|-------------------------------------------------|
@@ -118,7 +118,7 @@ Passive items that persist for the entire run. Found in shops and elite rooms.
 | Lucky Horseshoe        | Failing a target costs only 5 HP instead of 10                       |
 | Goblin's Hoard         | Earn +15 bonus gold when you beat a target by 150%+                  |
 | Cursed Chalice         | -10 max HP, but all shop prices are 20% cheaper                      |
-| Enchanted Quill        | Once per floor, you may re-use a category you've already scored       |
+| Enchanted Quill        | Once per floor, the best category can be scored again even if already used |
 | Shield of the Ancients | The first time you'd lose HP each floor, negate the damage            |
 | Wizard's Grimoire      | Once per floor, preview what your next roll will be before committing |
 | Dice Hoarder           | Start each floor with one extra die drawn from a pool of your spares  |
@@ -155,7 +155,6 @@ Between runs, spend **Dungeon Coins** (earned based on floors cleared) to upgrad
 |--------|-------------------------------------|
 | 1–5    | Hold / unhold that die              |
 | R      | Roll all unheld dice                |
-| 1–9    | Select a scoring category           |
 | Q      | Quit to menu                        |
 
 ---
