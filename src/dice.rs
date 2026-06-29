@@ -14,7 +14,7 @@ pub const WILD: u8 = 0;
 // ─── DieFace ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy)]
-struct DieFace {
+pub struct DieFace {
     value: u8,
     enchant: Option<u8>,
 }
@@ -25,6 +25,10 @@ impl DieFace {
             value,
             enchant: None,
         }
+    }
+
+    pub fn get_value(&self) -> u8 {
+        self.value
     }
 
     fn score(&self) -> u8 {
