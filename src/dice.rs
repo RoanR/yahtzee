@@ -4,7 +4,7 @@
 // current value and held state. DicePool owns the active dice for a room
 // and controls roll/hold flow.
 
-use rand::Rng;
+use rand::{Rng, rngs::ThreadRng};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -14,9 +14,9 @@ pub const WILD: u8 = 0;
 // ─── DieFace ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy)]
-struct DieFace {
+pub struct DieFace {
     value: u8,
-    enchant: Option<u8>,
+    enchant: Option<usize>,
 }
 
 impl DieFace {
@@ -27,9 +27,10 @@ impl DieFace {
         }
     }
 
-    fn score(&self) -> u8 {
-        self.value + self.enchant.unwrap_or(0)
+    pub fn get_value(&self) -> u8 {
+        self.value
     }
+
 }
 
 // ─── DieType ──────────────────────────────────────────────────────────────────
@@ -153,8 +154,8 @@ impl Die {
         match upgrade {
             DieUpgrade::Reface => {
                 // find index of min face, set it to max face value
-                let mut max = u8::MAX;
-                let mut min = u8::MIN;
+                let mut max = u8::MIN;
+                let mut min = u8::MAX;
                 let mut max_index = 0;
                 let mut min_index = 0;
                 for (index, face) in self.faces.iter().enumerate() {
@@ -177,7 +178,7 @@ impl Die {
                 if face_index >= self.faces.len() {
                     false
                 } else {
-                    self.faces[face_index].enchant = Some(bonus_score as u8);
+                    self.faces[face_index].enchant = Some(bonus_score);
                     true
                 }
             }
@@ -195,7 +196,7 @@ impl Die {
     // ── Rolling ───────────────────────────────────────────────────────────────
 
     // Roll this die: pick a random face, returns the new DieFace.
-    pub fn roll(&mut self, rng: &mut impl Rng) -> &DieFace {
+    pub fn roll(&mut self, rng: &mut ThreadRng) -> &DieFace {
         // pick a random index into self.faces
         let idx = rng.random_range(0..self.faces.len());
         self.current_value = self.faces[idx];
@@ -240,6 +241,7 @@ pub struct DicePool {
     pub dice: Vec<Die>,
     pub rolls_remaining: u8,
     pub max_rolls: u8,
+    pub rng: ThreadRng,
 }
 
 impl DicePool {
@@ -249,6 +251,7 @@ impl DicePool {
             dice: (0..5).map(|_| Die::standard()).collect(),
             max_rolls: 3,
             rolls_remaining: 3,
+            rng: rand::rng(),
         }
     }
 
@@ -258,11 +261,12 @@ impl DicePool {
             dice,
             max_rolls,
             rolls_remaining: max_rolls,
+            rng: rand::rng(),
         }
     }
 
     /// Roll all non-held, Returns false if no rolls remain.
-    pub fn roll_once(&mut self, rng: &mut impl Rng) -> bool {
+    pub fn roll_once(&mut self) -> bool {
         if self.rolls_remaining == 0 {
             return false;
         }
@@ -271,7 +275,7 @@ impl DicePool {
             if die.held {
                 continue;
             }
-            let _ = die.roll(rng);
+            let _ = die.roll(&mut self.rng);
         }
         self.rolls_remaining -= 1;
         true
@@ -315,10 +319,7 @@ impl DicePool {
     // Sum of enchant bonuses across all dice for the current face values.
     // Added to the final room score after calculate() runs.
     pub fn enchant_bonus_total(&self) -> usize {
-        self.dice
-            .iter()
-            .map(|d| d.current_value.enchant.unwrap_or(0) as usize)
-            .sum()
+        self.dice.iter().map(|d| d.current_value.enchant.unwrap_or(0)).sum()
     }
 
     // Add a new die to the pool (e.g. Extra Die Slot relic).

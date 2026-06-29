@@ -1,4 +1,5 @@
 mod dice;
+mod relics;
 mod scoring;
 
 fn main() {
