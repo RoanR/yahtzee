@@ -51,9 +51,14 @@ pub enum DieUpgrade {
     Reface,
     // When this die shows trigger_face, add bonus_score to the room score.
     // Stored on the die; consulted by the scoring layer at score time.
-    Enchant { trigger_face: u8, bonus_score: usize },
+    Enchant {
+        face_index: usize,
+        bonus_score: usize,
+    },
     // Add 1 to the face at face_index in self.faces.
-    Augment { face_index: usize },
+    Augment {
+        face_index: usize,
+    },
 }
 
 // ─── Die ──────────────────────────────────────────────────────────────────────
@@ -148,18 +153,41 @@ impl Die {
         match upgrade {
             DieUpgrade::Reface => {
                 // find index of min face, set it to max face value
-                // faces[min_index] = *faces.iter().max()
-                todo!()
+                let mut max = u8::MAX;
+                let mut min = u8::MIN;
+                let mut max_index = 0;
+                let mut min_index = 0;
+                for (index, face) in self.faces.iter().enumerate() {
+                    if face.value != WILD && face.value > max {
+                        max_index = index;
+                        max = face.value;
+                    }
+                    if face.value != WILD && face.value < min {
+                        min_index = index;
+                        min = face.value;
+                    }
+                }
+                self.faces[min_index] = self.faces[max_index];
+                true
             }
-            DieUpgrade::Enchant { trigger_face, bonus_score } => {
-                // overwrite any existing enchant (one enchant per die)
-                // self.enchant = Some((trigger_face, bonus_score))
-                todo!()
+            DieUpgrade::Enchant {
+                face_index,
+                bonus_score,
+            } => {
+                if face_index >= self.faces.len() {
+                    false
+                } else {
+                    self.faces[face_index].enchant = Some(bonus_score as u8);
+                    true
+                }
             }
             DieUpgrade::Augment { face_index } => {
-                // bounds-check face_index; add 1 to faces[face_index]
-                // return false if face_index >= faces.len()
-                todo!()
+                if face_index >= self.faces.len() {
+                    false
+                } else {
+                    self.faces[face_index].value += 1;
+                    true
+                }
             }
         }
     }
