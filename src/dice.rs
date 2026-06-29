@@ -16,7 +16,7 @@ pub const WILD: u8 = 0;
 #[derive(Debug, Clone, Copy)]
 pub struct DieFace {
     value: u8,
-    enchant: Option<u8>,
+    enchant: Option<usize>,
 }
 
 impl DieFace {
@@ -31,8 +31,8 @@ impl DieFace {
         self.value
     }
 
-    fn score(&self) -> u8 {
-        self.value + self.enchant.unwrap_or(0)
+    pub fn score(&self) -> usize {
+        self.value as usize + self.enchant.unwrap_or(0)
     }
 }
 
@@ -181,7 +181,7 @@ impl Die {
                 if face_index >= self.faces.len() {
                     false
                 } else {
-                    self.faces[face_index].enchant = Some(bonus_score as u8);
+                    self.faces[face_index].enchant = Some(bonus_score);
                     true
                 }
             }
@@ -322,10 +322,7 @@ impl DicePool {
     // Sum of enchant bonuses across all dice for the current face values.
     // Added to the final room score after calculate() runs.
     pub fn enchant_bonus_total(&self) -> usize {
-        self.dice
-            .iter()
-            .map(|d| d.current_value.enchant.unwrap_or(0) as usize)
-            .sum()
+        self.dice.iter().map(|d| d.current_value.enchant.unwrap_or(0)).sum()
     }
 
     // Add a new die to the pool (e.g. Extra Die Slot relic).
