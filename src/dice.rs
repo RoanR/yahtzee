@@ -31,9 +31,6 @@ impl DieFace {
         self.value
     }
 
-    pub fn score(&self) -> usize {
-        self.value as usize + self.enchant.unwrap_or(0)
-    }
 }
 
 // ─── DieType ──────────────────────────────────────────────────────────────────
