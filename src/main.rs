@@ -1,4 +1,5 @@
 mod dice;
+mod dungeon;
 mod relics;
 mod scoring;
 
