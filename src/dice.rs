@@ -22,6 +22,19 @@ pub enum DieType {
     Bones,    // [1, 2, 3, 4, 5, 6, 7, 8] — counts as <=6 for combo checks
 }
 
+// ─── DieUpgrade ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum DieUpgrade {
+    // Replace the single lowest face value with the current highest face value.
+    Reface,
+    // When this die shows trigger_face, add bonus_score to the room score.
+    // Stored on the die; consulted by the scoring layer at score time.
+    Enchant { trigger_face: u8, bonus_score: usize },
+    // Add 1 to the face at face_index in self.faces.
+    Augment { face_index: usize },
+}
+
 // ─── Die ──────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -30,6 +43,8 @@ pub struct Die {
     pub faces: Vec<u8>,    // all possible face values for this die
     pub current_value: u8, // value currently showing; WILD if wild face up
     pub held: bool,
+    // If Some((trigger, bonus)), the scoring layer adds bonus when trigger shows.
+    pub enchant: Option<(u8, usize)>,
 }
 
 impl Default for Die {
@@ -39,6 +54,7 @@ impl Default for Die {
             faces: vec![1, 2, 3, 4, 5, 6],
             current_value: 1,
             held: false,
+            enchant: None,
         }
     }
 }
@@ -76,6 +92,30 @@ impl Die {
         }
     }
 
+    // ── Upgrades ──────────────────────────────────────────────────────────────
+
+    // Apply a campfire upgrade to this die. Returns false when the upgrade
+    // cannot be applied (e.g. Augment with an out-of-bounds face_index).
+    pub fn upgrade(&mut self, upgrade: DieUpgrade) -> bool {
+        match upgrade {
+            DieUpgrade::Reface => {
+                // find index of min face, set it to max face value
+                // faces[min_index] = *faces.iter().max()
+                todo!()
+            }
+            DieUpgrade::Enchant { trigger_face, bonus_score } => {
+                // overwrite any existing enchant (one enchant per die)
+                // self.enchant = Some((trigger_face, bonus_score))
+                todo!()
+            }
+            DieUpgrade::Augment { face_index } => {
+                // bounds-check face_index; add 1 to faces[face_index]
+                // return false if face_index >= faces.len()
+                todo!()
+            }
+        }
+    }
+
     // ── Rolling ───────────────────────────────────────────────────────────────
 
     // Roll this die: pick a random face and apply any die-type side effects.
@@ -91,6 +131,13 @@ impl Die {
 
     pub fn toggle_hold(&mut self) {
         self.held = !self.held
+    }
+
+    // Returns the enchant bonus for the current face value, or 0 if none.
+    // Called by the scoring layer after a final roll to sum extra score.
+    pub fn enchant_bonus(&self) -> usize {
+        // if self.enchant == Some((face, bonus)) && current_value == face { bonus } else { 0 }
+        todo!()
     }
 
     // True when the die is currently showing a Wild face.
@@ -195,6 +242,13 @@ impl DicePool {
 
     pub fn can_roll(&self) -> bool {
         self.rolls_remaining > 0
+    }
+
+    // Sum of enchant bonuses across all dice for the current face values.
+    // Added to the final room score after calculate() runs.
+    pub fn enchant_bonus_total(&self) -> usize {
+        // self.dice.iter().map(|d| d.enchant_bonus()).sum()
+        todo!()
     }
 
     // Add a new die to the pool (e.g. Extra Die Slot relic).
