@@ -4,7 +4,7 @@
 // current value and held state. DicePool owns the active dice for a room
 // and controls roll/hold flow.
 
-use rand::Rng;
+use rand::{Rng, rngs::ThreadRng};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ impl Die {
     // ── Rolling ───────────────────────────────────────────────────────────────
 
     // Roll this die: pick a random face, returns the new DieFace.
-    pub fn roll(&mut self, rng: &mut impl Rng) -> &DieFace {
+    pub fn roll(&mut self, rng: &mut ThreadRng) -> &DieFace {
         // pick a random index into self.faces
         let idx = rng.random_range(0..self.faces.len());
         self.current_value = self.faces[idx];
@@ -244,6 +244,7 @@ pub struct DicePool {
     pub dice: Vec<Die>,
     pub rolls_remaining: u8,
     pub max_rolls: u8,
+    pub rng: ThreadRng,
 }
 
 impl DicePool {
@@ -253,6 +254,7 @@ impl DicePool {
             dice: (0..5).map(|_| Die::standard()).collect(),
             max_rolls: 3,
             rolls_remaining: 3,
+            rng: rand::rng(),
         }
     }
 
@@ -262,11 +264,12 @@ impl DicePool {
             dice,
             max_rolls,
             rolls_remaining: max_rolls,
+            rng: rand::rng(),
         }
     }
 
     /// Roll all non-held, Returns false if no rolls remain.
-    pub fn roll_once(&mut self, rng: &mut impl Rng) -> bool {
+    pub fn roll_once(&mut self) -> bool {
         if self.rolls_remaining == 0 {
             return false;
         }
@@ -275,7 +278,7 @@ impl DicePool {
             if die.held {
                 continue;
             }
-            let _ = die.roll(rng);
+            let _ = die.roll(&mut self.rng);
         }
         self.rolls_remaining -= 1;
         true
