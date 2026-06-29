@@ -157,8 +157,8 @@ impl Die {
         match upgrade {
             DieUpgrade::Reface => {
                 // find index of min face, set it to max face value
-                let mut max = u8::MAX;
-                let mut min = u8::MIN;
+                let mut max = u8::MIN;
+                let mut min = u8::MAX;
                 let mut max_index = 0;
                 let mut min_index = 0;
                 for (index, face) in self.faces.iter().enumerate() {
