@@ -8,15 +8,16 @@
 pub mod generation;
 pub mod room;
 
-use rand::Rng;
-
+use rand::{Rng, seq::IndexedRandom};
 use room::{BossRoom, Room};
+
+use crate::dungeon::generation::generate_floor;
 
 // ─── Floor ────────────────────────────────────────────────────────────────────
 
 pub struct Floor {
-    pub floor_num: usize,    // 1-indexed
-    pub rooms: Vec<Room>,    // always 3 non-boss rooms
+    pub floor_num: usize, // 1-indexed
+    pub rooms: Vec<Room>, // always 3 non-boss rooms
     pub boss: BossRoom,
     pub current_room: usize, // index into rooms; when == rooms.len(), boss is next
 }
@@ -24,55 +25,59 @@ pub struct Floor {
 impl Floor {
     // Returns the current non-boss room, or None if the boss is next.
     pub fn current_room(&self) -> Option<&Room> {
-        // if current_room < rooms.len() { Some(&rooms[current_room]) } else { None }
-        todo!()
+        if self.current_room < self.rooms.len() {
+            Some(&self.rooms[self.current_room])
+        } else {
+            None
+        }
     }
 
     // Advance to the next room. Returns false if already past the last room.
     pub fn advance(&mut self) -> bool {
-        // if current_room <= rooms.len() { current_room += 1; true } else { false }
-        todo!()
+        if self.current_room <= self.rooms.len() {
+            self.current_room += 1;
+            true
+        } else {
+            false
+        }
     }
 
     // True when the player should enter the boss encounter.
     pub fn boss_next(&self) -> bool {
-        // current_room == rooms.len()
-        todo!()
+        self.current_room == self.rooms.len()
     }
 }
 
 // ─── Dungeon ──────────────────────────────────────────────────────────────────
 
 pub struct Dungeon {
-    pub floors: Vec<Floor>,
-    pub current_floor: usize, // 0-indexed into floors
+    floors: Vec<Floor>,
+    current_floor: usize, // 0-indexed into floors
 }
 
 impl Dungeon {
     // Start a new dungeon run. Generates only the first floor immediately.
     pub fn new(rng: &mut impl Rng) -> Self {
-        // floors = vec![generate_floor(1, rng)]
-        // Dungeon { floors, current_floor: 0 }
-        todo!()
+        Dungeon {
+            floors: vec![generate_floor(1, rng)],
+            current_floor: 0,
+        }
     }
 
     // The floor the player is currently on.
     pub fn current_floor(&self) -> &Floor {
-        // &floors[current_floor]
-        todo!()
+        &self.floors[self.current_floor]
     }
 
     pub fn current_floor_mut(&mut self) -> &mut Floor {
-        // &mut floors[current_floor]
-        todo!()
+        &mut self.floors[self.current_floor]
     }
 
     // Called after the boss is defeated. Generates and appends the next floor,
     // then increments current_floor.
     pub fn descend(&mut self, rng: &mut impl Rng) {
-        // let next_num = floors.len() + 1
-        // floors.push(generate_floor(next_num, rng))
-        // current_floor += 1
-        todo!()
+        let next_num = self.floors.len() + 1;
+        self.floors.push(generate_floor(next_num, rng));
+        self.current_floor += 1;
     }
 }
