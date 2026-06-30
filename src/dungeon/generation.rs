@@ -5,7 +5,7 @@
 // is generated procedurally.
 //
 // Score target scaling:
-//   base     = 50 + floor_num * 30
+//   base     = floor_num * 10
 //   elite    = base * 3 / 2
 //   boss     = base * 2
 //
@@ -16,29 +16,37 @@ use rand::Rng;
 
 use crate::scoring::ScoreCategory;
 
-use super::{Floor, room::{BossRoom, Debuff, Room, ScoreTarget}};
+use super::{
+    Floor,
+    room::{BossRoom, Debuff, Room, ScoreTarget},
+};
 
 // ─── Target scaling ───────────────────────────────────────────────────────────
 
 // Base score target for a given floor number (1-indexed).
 fn base_target(floor_num: usize) -> u32 {
-    // 50 + floor_num * 30
-    todo!()
+    (floor_num * 10) as u32
 }
 
 fn challenge_target(floor_num: usize) -> ScoreTarget {
-    // ScoreTarget { required: base_target(floor_num), reward_gold: 25 }
-    todo!()
+    ScoreTarget {
+        required: base_target(floor_num),
+        reward_gold: 25,
+    }
 }
 
 fn elite_target(floor_num: usize) -> ScoreTarget {
-    // ScoreTarget { required: base_target(floor_num) * 3 / 2, reward_gold: 50 }
-    todo!()
+    ScoreTarget {
+        required: base_target(floor_num) * 3 / 2,
+        reward_gold: 50,
+    }
 }
 
 fn boss_target(floor_num: usize) -> ScoreTarget {
-    // ScoreTarget { required: base_target(floor_num) * 2, reward_gold: 0 }
-    todo!()
+    ScoreTarget {
+        required: base_target(floor_num) * 2,
+        reward_gold: 0,
+    }
 }
 
 // ─── Boss data ────────────────────────────────────────────────────────────────
@@ -57,7 +65,7 @@ fn boss_for_floor(floor_num: usize) -> BossRoom {
         2 => BossRoom {
             name: "Stone Golem",
             target,
-            weakness: ScoreCategory::Sixes, // Upper section: best represented by Sixes
+            weakness: ScoreCategory::Sixes,
             debuff: Debuff::ExtraHpPerOne(2),
         },
         3 => BossRoom {
@@ -90,20 +98,25 @@ fn boss_for_floor(floor_num: usize) -> BossRoom {
 
 // Pick a single non-boss room type from the weighted pool.
 fn random_room(floor_num: usize, rng: &mut impl Rng) -> Room {
-    // draw a value in 0..100 and map to room type by cumulative weight:
-    //   0..50  => Challenge
-    //   50..70 => Elite
-    //   70..85 => Shop
-    //   85..100 => Rest
-    todo!()
+    let value = rng.random_range(0..100);
+    match value {
+        50..70 => Room::Elite(elite_target(floor_num)),
+        70..85 => Room::Shop,
+        85..100 => Room::Rest,
+        _ => Room::Challenge(challenge_target(floor_num)),
+    }
 }
 
 // ─── Floor generation ─────────────────────────────────────────────────────────
 
 // Generate a complete floor: 3 random rooms + the floor's boss.
 pub fn generate_floor(floor_num: usize, rng: &mut impl Rng) -> Floor {
-    // rooms = (0..3).map(|_| random_room(floor_num, rng)).collect()
-    // boss  = boss_for_floor(floor_num)
-    // Floor { floor_num, rooms, boss }
-    todo!()
+    let rooms = (0..3).map(|_| random_room(floor_num, rng)).collect();
+    let boss = boss_for_floor(floor_num);
+    Floor {
+        floor_num,
+        rooms,
+        boss,
+        current_room: 0,
+    }
 }
