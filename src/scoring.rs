@@ -13,6 +13,7 @@ use std::{collections::HashMap, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScoreCategory {
+    HighDie,
     Chance,
     Ones,
     Twos,
@@ -20,8 +21,6 @@ pub enum ScoreCategory {
     Fours,
     Fives,
     Sixes,
-    ThreeOfAKind,
-    FourOfAKind,
     FullHouse,
     SmallStraight,
     LargeStraight,
@@ -31,6 +30,7 @@ pub enum ScoreCategory {
 impl fmt::Display for ScoreCategory {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ScoreCategory::HighDie => write!(f, "Highest Die"),
             ScoreCategory::Chance => write!(f, "Chance"),
             ScoreCategory::Ones => write!(f, "Ones"),
             ScoreCategory::Twos => write!(f, "Twos"),
@@ -38,8 +38,6 @@ impl fmt::Display for ScoreCategory {
             ScoreCategory::Fours => write!(f, "Fours"),
             ScoreCategory::Fives => write!(f, "Fives"),
             ScoreCategory::Sixes => write!(f, "Sixes"),
-            ScoreCategory::ThreeOfAKind => write!(f, "Three of a kind"),
-            ScoreCategory::FourOfAKind => write!(f, "Four of a kind"),
             ScoreCategory::FullHouse => write!(f, "Full house"),
             ScoreCategory::SmallStraight => write!(f, "Small straight"),
             ScoreCategory::LargeStraight => write!(f, "Large straight"),
@@ -62,26 +60,18 @@ fn counts(dice: &[u8]) -> HashMap<u8, usize> {
 
 // Best upper-section / N-of-a-kind score achievable, assigning all wilds to
 // whichever face value produces the highest total.
-fn score_counts(dice_sums: &HashMap<u8, usize>) -> Option<usize> {
+fn score_counts(dice_sums: &HashMap<u8, usize>, target: u8) -> Option<usize> {
     let bonus_three = 10;
     let bonus_four = 15;
 
-    let wild_count = dice_sums.get(&WILD).copied().unwrap_or(0);
-    let mut max = 0;
-
-    for (&die, &count) in dice_sums.iter() {
-        if die == WILD {
-            continue;
-        }
-        let effective = count + wild_count;
-        let bonus = match effective {
-            3 => bonus_three,
-            e if e >= 4 => bonus_four,
-            _ => 0,
-        };
-        max = max.max(die as usize * effective + bonus);
+    let count = dice_sums.get(&WILD).unwrap_or(&0) + dice_sums.get(&target).unwrap_or(&0);
+    if count >= 4 {
+        Some(count * target as usize + bonus_four)
+    } else if count >= 3 {
+        Some(count * target as usize + bonus_three)
+    } else {
+        Some(count * target as usize)
     }
-    Some(max)
 }
 
 // Takes raw dice so the value range can be derived dynamically — die faces can
@@ -98,7 +88,13 @@ fn score_fullhouse(dice: &[u8]) -> Option<usize> {
     let dice_sums = counts(dice);
     // Wilds can act as values above the current non-wild max; ensure the search
     // ceiling covers at least standard d6 faces.
-    let search_max = dice.iter().filter(|&&v| v != WILD).max().copied().unwrap_or(0).max(6);
+    let search_max = dice
+        .iter()
+        .filter(|&&v| v != WILD)
+        .max()
+        .copied()
+        .unwrap_or(0)
+        .max(6);
 
     let face_a = (1u8..=search_max)
         .rev()
@@ -202,26 +198,93 @@ fn score_straight(dice: &[u8], len: usize, bonus: usize) -> Option<usize> {
 
 // ─── Core scoring ─────────────────────────────────────────────────────────────
 
-// Calculate the maximum score that can be made from a slice of die values.
-pub fn calculate(dice: &[u8]) -> usize {
-    let mut max = 0;
+// Calculate the maximum score for a given category
+pub fn calculate_for(category: &ScoreCategory, dice: &[u8]) -> Option<usize> {
     let c = counts(dice);
+    match category {
+        ScoreCategory::HighDie => Some(
+            dice.iter()
+                .filter(|&&v| v != WILD)
+                .max()
+                .copied()
+                .unwrap_or(0) as usize,
+        ),
+        ScoreCategory::Chance => Some(
+            dice.iter()
+                .map(|&v| if v == WILD { 6 } else { v as usize })
+                .sum(),
+        ),
+        ScoreCategory::Ones => score_counts(&c, 1),
+        ScoreCategory::Twos => score_counts(&c, 2),
+        ScoreCategory::Threes => score_counts(&c, 3),
+        ScoreCategory::Fours => score_counts(&c, 4),
+        ScoreCategory::Fives => score_counts(&c, 5),
+        ScoreCategory::Sixes => score_counts(&c, 6),
+        ScoreCategory::FullHouse => score_fullhouse(dice),
+        ScoreCategory::SmallStraight => score_straight(dice, 4, 30),
+        ScoreCategory::LargeStraight => score_straight(dice, 5, 40),
+        ScoreCategory::Yahtzee => score_yahtzee(&c),
+    }
+}
 
-    // Chance
-    max = max.max(
-        dice.iter()
-            .map(|&v| if v == WILD { 6 } else { v as usize })
-            .sum(),
-    );
-    // Upper
-    max = max.max(score_counts(&c).unwrap_or(0));
-    // full house
-    max = max.max(score_fullhouse(dice).unwrap_or(0));
-    // SmallStraight:
-    max = max.max(score_straight(dice, 4, 30).unwrap_or(0));
-    // LargeStraight:
-    max = max.max(score_straight(dice, 5, 40).unwrap_or(0));
-    // Yahtzee:
-    max = max.max(score_yahtzee(&c).unwrap_or(0));
-    max
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dice::WILD;
+
+    fn score(cat: ScoreCategory, dice: &[u8]) -> Option<usize> {
+        calculate_for(&cat, dice)
+    }
+
+    // HighDie: max non-wild face; wilds are skipped
+    #[test]
+    fn test_high_die() {
+        assert_eq!(score(ScoreCategory::HighDie, &[3, 1, 5, 2, 4]), Some(5));
+        assert_eq!(score(ScoreCategory::HighDie, &[WILD, 3, WILD, WILD, WILD]), Some(3));
+        assert_eq!(score(ScoreCategory::HighDie, &[WILD, WILD, WILD, WILD, WILD]), Some(0));
+    }
+
+    // Chance: sum all dice; wilds count as 6
+    #[test]
+    fn test_chance() {
+        assert_eq!(score(ScoreCategory::Chance, &[1, 2, 3, 4, 5]), Some(15));
+        assert_eq!(score(ScoreCategory::Chance, &[WILD, 1, 1, 1, 1]), Some(10));
+    }
+
+    // Upper section (Ones-Sixes): count matching faces + bonus at 3/4+; wilds boost count
+    #[test]
+    fn test_upper_section() {
+        // Three 5s: 3 * 5 + bonus_three(10) = 25
+        assert_eq!(score(ScoreCategory::Fives, &[5, 5, 5, 1, 2]), Some(25));
+        // One 6 + wild: 2 * 6 = 12 (below bonus threshold)
+        assert_eq!(score(ScoreCategory::Sixes, &[6, WILD, 1, 2, 3]), Some(12));
+        // No matching: 0
+        assert_eq!(score(ScoreCategory::Fours, &[1, 2, 3, 5, 6]), Some(0));
+    }
+
+    // FullHouse: greedy two-pass; wilds fill slots; impossible yields None
+    #[test]
+    fn test_fullhouse() {
+        assert_eq!(score(ScoreCategory::FullHouse, &[5, 5, 5, 3, 3]), Some(46));
+        assert_eq!(score(ScoreCategory::FullHouse, &[4, 4, 4, 6, WILD]), Some(49));
+        assert_eq!(score(ScoreCategory::FullHouse, &[1, 2, 3, 4, 5]), None);
+    }
+
+    // Straights: wilds fill gaps; impossible yields None
+    #[test]
+    fn test_straights() {
+        assert_eq!(score(ScoreCategory::SmallStraight, &[2, 3, 4, 5, 5]), Some(44));
+        assert_eq!(score(ScoreCategory::LargeStraight, &[1, 2, 3, 4, 5]), Some(55));
+        assert_eq!(score(ScoreCategory::SmallStraight, &[3, 5, 6, 1, WILD]), Some(48));
+        assert_eq!(score(ScoreCategory::SmallStraight, &[1, 1, 6, 6, 6]), None);
+    }
+
+    // Yahtzee: all matching; wilds count; all-wilds scores as 6s; mixed yields None
+    #[test]
+    fn test_yahtzee() {
+        assert_eq!(score(ScoreCategory::Yahtzee, &[4, 4, 4, 4, 4]), Some(120));
+        assert_eq!(score(ScoreCategory::Yahtzee, &[3, 3, 3, 3, WILD]), Some(115));
+        assert_eq!(score(ScoreCategory::Yahtzee, &[WILD, WILD, WILD, WILD, WILD]), Some(130));
+        assert_eq!(score(ScoreCategory::Yahtzee, &[1, 2, 3, 4, 5]), None);
+    }
 }

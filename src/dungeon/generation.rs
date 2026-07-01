@@ -59,7 +59,7 @@ fn boss_for_floor(floor_num: usize) -> BossRoom {
         1 => BossRoom {
             name: "Rat King",
             target,
-            weakness: ScoreCategory::ThreeOfAKind,
+            weakness: ScoreCategory::Chance,
             debuff: Debuff::OneDieForcedOne,
         },
         2 => BossRoom {
