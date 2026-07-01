@@ -9,10 +9,13 @@
 use rand::Rng;
 
 use crate::{
-    dice::{Die, DicePool, DieUpgrade},
-    dungeon::Dungeon,
+    dice::{DicePool, DieUpgrade},
+    dungeon::{
+        room::{self},
+        Dungeon,
+    },
     relics::Relic,
-    scoring::ScoreCategory,
+    scoring::{self, ScoreCategory},
 };
 
 // ─── GamePhase ────────────────────────────────────────────────────────────────
@@ -22,7 +25,11 @@ pub enum GamePhase {
     // Player is rolling and holding dice.
     Rolling,
     // All rolls used or player chose to score; show result and advance.
-    Scored { score: usize, target: u32, success: bool },
+    Scored {
+        score: usize,
+        target: u32,
+        success: bool,
+    },
     // Boss fight in progress.
     Boss,
     // Player is in a shop room.
@@ -49,20 +56,26 @@ pub struct GameState {
     pub used_this_room: Vec<ScoreCategory>,
     pub relics: Vec<Box<dyn Relic>>,
     pub phase: GamePhase,
+    // Base rolls per room before relic bonuses. Stored separately so that
+    // begin_room can recompute max_rolls cleanly rather than accumulating.
+    base_rolls: u8,
 }
 
 impl GameState {
     // Start a new run with default starting stats.
     pub fn new(rng: &mut impl Rng) -> Self {
-        // dice_pool = DicePool::new()
-        // hp = max_hp = 30
-        // gold = 0
-        // dungeon = Dungeon::new(rng)
-        // unlocked = vec![ScoreCategory::Chance]
-        // used_this_room = vec![]
-        // relics = vec![]
-        // phase = GamePhase::Rolling
-        todo!()
+        Self {
+            dice_pool: DicePool::new(),
+            hp: 30,
+            max_hp: 30,
+            gold: 0,
+            dungeon: Dungeon::new(rng),
+            unlocked: vec![ScoreCategory::HighDie, ScoreCategory::Chance],
+            used_this_room: vec![],
+            relics: vec![],
+            phase: GamePhase::Rolling,
+            base_rolls: 3,
+        }
     }
 
     // ── Room lifecycle ────────────────────────────────────────────────────────
@@ -70,100 +83,129 @@ impl GameState {
     // Called at the start of every new room: reset dice, clear used categories,
     // apply relic on_room_start effects, apply max_rolls from relic bonuses.
     pub fn begin_room(&mut self) {
-        // dice_pool.reset_for_room()
-        // used_this_room.clear()
-        // apply extra_rolls() from each relic to dice_pool.max_rolls
-        // fire on_floor_start hooks if this is the first room of a new floor
-        todo!()
+        self.used_this_room.clear();
+
+        // Apply on_floor_start hooks from relics
+        if self.dungeon.current_floor().current_room == 0 {
+            self.relics.iter_mut().for_each(|r| r.on_floor_start());
+        }
+
+        // Recompute max_rolls from base each room so relic bonuses don't stack.
+        let extra: u8 = self.relics.iter().map(|r| r.extra_rolls()).sum();
+        self.dice_pool.max_rolls = self.base_rolls + extra;
+
+        self.dice_pool.reset_for_room();
     }
 
     // Roll the unheld dice. Fires relic on_roll_start hooks before rolling.
     // Returns false if no rolls remain.
     pub fn roll(&mut self) -> bool {
-        // let first_roll = dice_pool.rolls_remaining == dice_pool.max_rolls
-        // relics.iter_mut().for_each(|r| r.on_roll_start(&mut dice_pool, first_roll))
-        // dice_pool.roll_once()
-        todo!()
+        let first_roll = self.dice_pool.rolls_remaining == self.dice_pool.max_rolls;
+        self.relics
+            .iter_mut()
+            .for_each(|r| r.on_roll_start(&mut self.dice_pool, first_roll));
+        self.dice_pool.roll_once()
     }
 
     // Score the current dice: pick the best available unlocked category,
     // apply enchant bonuses, compare against the room target.
     // Transitions phase to Scored.
     pub fn score(&mut self) {
-        // values = dice_pool.values()
-        // best_category = unlocked.iter()
-        //     .filter(|c| !used_this_room.contains(c))
-        //     .max_by_key(|c| scoring::calculate_for(c, &values))
-        // score = scoring::calculate_for(best_category, &values) + dice_pool.enchant_bonus_total()
-        // used_this_room.push(best_category)
+        let values = self.dice_pool.values();
+        let best_category = self
+            .unlocked
+            .iter()
+            .filter(|&c| !self.used_this_room.contains(c))
+            .max_by_key(|&c| scoring::calculate_for(c, &values))
+            .unwrap_or(&ScoreCategory::HighDie);
+        let score = scoring::calculate_for(&best_category, &values).unwrap_or(0)
+            + self.dice_pool.enchant_bonus_total();
+
+        if *best_category != ScoreCategory::HighDie {
+            self.used_this_room.push(best_category.clone());
+        }
+
         // compare score vs current room target
-        // transition to GamePhase::Scored { score, target, success }
-        todo!()
+        let target = match self.dungeon.current_floor().current_room() {
+            Some(room::Room::Challenge(x)) => x.required,
+            Some(room::Room::Elite(x)) => x.required,
+            None | Some(room::Room::Shop) | Some(room::Room::Rest) => return, //Should be unreachable;
+        };
+
+        self.phase = GamePhase::Scored {
+            score,
+            target,
+            success: target as usize <= score,
+        }
     }
 
     // ── HP / gold ─────────────────────────────────────────────────────────────
 
     // Apply HP loss, running it through all relic on_hp_loss hooks first.
     pub fn take_damage(&mut self, amount: u32) {
-        // let actual = relics.iter_mut().fold(amount, |hp, r| r.on_hp_loss(hp))
-        // hp = hp.saturating_sub(actual)
-        // if hp == 0 { phase = GamePhase::GameOver }
-        todo!()
+        let actual = self
+            .relics
+            .iter_mut()
+            .fold(amount, |hp, r| r.on_hp_loss(hp));
+        self.hp = self.hp.saturating_sub(actual);
+        if self.hp == 0 {
+            self.phase = GamePhase::GameOver
+        }
     }
 
     pub fn heal(&mut self, amount: u32) {
-        // hp = (hp + amount).min(max_hp)
-        todo!()
+        self.hp = (self.hp + amount).min(self.max_hp);
     }
 
     pub fn earn_gold(&mut self, amount: u32) {
-        // gold += amount
-        // gold += relics.iter().map(|r| r.on_score(score, target)).sum()  -- called from score()
-        todo!()
+        self.gold += amount;
     }
 
     pub fn spend_gold(&mut self, amount: u32) -> bool {
-        // if gold >= amount { gold -= amount; true } else { false }
-        todo!()
+        if self.gold >= amount {
+            self.gold -= amount;
+            true
+        } else {
+            false
+        }
     }
 
     // ── Progression ───────────────────────────────────────────────────────────
 
     // Called after the boss is defeated. Transitions to CategoryUnlock.
     pub fn defeat_boss(&mut self) {
-        // phase = GamePhase::CategoryUnlock
-        todo!()
+        self.phase = GamePhase::CategoryUnlock;
     }
 
     // Unlock a new scoring category (called from the category-unlock screen).
     pub fn unlock_category(&mut self, category: ScoreCategory) {
-        // if !unlocked.contains(&category) { unlocked.push(category) }
-        todo!()
+        if !self.unlocked.contains(&category) {
+            self.unlocked.push(category)
+        }
     }
 
     // Descend to the next floor after unlocking a category.
     pub fn descend(&mut self, rng: &mut impl Rng) {
-        // dungeon.descend(rng)
-        // begin_room()
-        todo!()
+        self.dungeon.descend(rng);
+        self.begin_room();
     }
 
     // ── Relic management ──────────────────────────────────────────────────────
 
     // Acquire a relic: add it to the list and apply one-time stat modifiers.
     pub fn acquire_relic(&mut self, relic: Box<dyn Relic>) {
-        // max_hp = (max_hp as i32 + relic.max_hp_modifier()).max(1) as u32
-        // hp = hp.min(max_hp)
-        // relics.push(relic)
-        todo!()
+        self.max_hp = (self.max_hp as i32 + relic.max_hp_modifier()).max(1) as u32;
+        self.hp = self.hp.min(self.max_hp);
+        self.relics.push(relic);
     }
 
     // ── Die management ────────────────────────────────────────────────────────
 
     // Apply an upgrade to a die at index in the pool (campfire interaction).
     pub fn upgrade_die(&mut self, die_index: usize, upgrade: DieUpgrade) -> bool {
-        // if let Some(die) = dice_pool.dice.get_mut(die_index) { die.upgrade(upgrade) }
-        // else { false }
-        todo!()
+        self.dice_pool
+            .dice
+            .get_mut(die_index)
+            .map_or_else(|| false, |d| d.upgrade(upgrade))
     }
 }

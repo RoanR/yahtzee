@@ -199,7 +199,7 @@ fn score_straight(dice: &[u8], len: usize, bonus: usize) -> Option<usize> {
 // ─── Core scoring ─────────────────────────────────────────────────────────────
 
 // Calculate the maximum score for a given category
-pub fn calculate_for(category: ScoreCategory, dice: &[u8]) -> Option<usize> {
+pub fn calculate_for(category: &ScoreCategory, dice: &[u8]) -> Option<usize> {
     let c = counts(dice);
     match category {
         ScoreCategory::HighDie => Some(*dice.iter().max().unwrap_or(&0) as usize),
