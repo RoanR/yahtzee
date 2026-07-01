@@ -13,6 +13,7 @@ use std::{collections::HashMap, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScoreCategory {
+    HighDie,
     Chance,
     Ones,
     Twos,
@@ -29,6 +30,7 @@ pub enum ScoreCategory {
 impl fmt::Display for ScoreCategory {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ScoreCategory::HighDie => write!(f, "Highest Die"),
             ScoreCategory::Chance => write!(f, "Chance"),
             ScoreCategory::Ones => write!(f, "Ones"),
             ScoreCategory::Twos => write!(f, "Twos"),
@@ -200,6 +202,7 @@ fn score_straight(dice: &[u8], len: usize, bonus: usize) -> Option<usize> {
 pub fn calculate_for(category: ScoreCategory, dice: &[u8]) -> Option<usize> {
     let c = counts(dice);
     match category {
+        ScoreCategory::HighDie => Some(*dice.iter().max().unwrap_or(&0) as usize),
         ScoreCategory::Chance => {
             let x = dice
                 .iter()
