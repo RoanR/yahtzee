@@ -90,38 +90,63 @@ impl App {
         }
     }
 
-    // Main game screen: header + dice row + score panel + keybind hints.
+    // Main game screen - Option A layout:
+    //
+    //   [header]  Length(2)  DungeonView (title + status row 0, target + HP bar row 1)
+    //   [main]    Min(0)     horizontal split:
+    //     [left]  Fill(2)    DiceView (die boxes + rolls indicator below)
+    //     [right] Fill(3)    ScoreView (title + category list)
+    //   [hints]   Length(1)  keybind line
+    //
+    // The Fill(2)/Fill(3) ratio gives the left panel ~40% and the right ~60% of
+    // the width. On an 80-col terminal the left gets ~32 cols (enough for 5 dice
+    // at 5 chars each) and the right gets ~48 cols (enough for long category names).
     fn render_game(&self, frame: &mut ratatui::Frame) {
         let area = frame.area();
-        let chunks = Layout::default()
-            .direction(ratatui::layout::Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(5),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(area);
-        frame.render_widget(dungeon_view::DungeonView::new(&self.state), chunks[0]);
-        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), chunks[1]);
+
+        // Outer vertical split.
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        // Inner horizontal split inside main_area.
+        let [left_area, right_area] =
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
+
+        // Render DungeonView into header_area (2 rows).
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+
+        // Render DiceView (die boxes + rolls indicator) into left_area.
+        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), left_area);
+
+        // Render ScoreView (title + categories) into right_area.
         frame.render_widget(
             score_view::ScoreView::new(
                 &self.state.dice_pool,
                 &self.state.unlocked,
                 &self.state.used_this_room,
             ),
-            chunks[2],
+            right_area,
         );
+
+        // Render keybind hint into hints_area.
         frame.render_widget(
             Paragraph::new("[1-5] Hold  [R] Roll  [S] Score  [Q] Quit"),
-            chunks[3],
+            hints_area,
         );
     }
 
     // Scored result screen: shown after player scores, before advancing to next room.
     fn render_scored(&self, frame: &mut ratatui::Frame) {
         let (score, target, success) = match &self.state.phase {
-            GamePhase::Scored { score, target, success } => (*score, *target, *success),
+            GamePhase::Scored {
+                score,
+                target,
+                success,
+            } => (*score, *target, *success),
             _ => return,
         };
 
@@ -152,41 +177,47 @@ impl App {
         frame.render_widget(Paragraph::new(text), frame.area());
     }
 
-    // Boss screen: same layout as render_game but with boss info header.
+    // Boss screen layout:
+    //
+    //   [header]  Length(2)  BossHeaderView (boss name + gold row 0,
+    //                                        weakness + target + HP bar row 1)
+    //   [main]    Min(0)     horizontal split (same as render_game):
+    //     [left]  Fill(2)    DiceView (die boxes + rolls indicator)
+    //     [right] Fill(3)    ScoreView
+    //   [hints]   Length(1)  keybind line
+    //
+    // BossHeaderView is a new widget defined in dungeon_view.rs. It takes the same
+    // &GameState as DungeonView and pulls boss data from state.dungeon.current_floor().boss.
     fn render_boss(&self, frame: &mut ratatui::Frame) {
         let area = frame.area();
-        let chunks = Layout::default()
-            .direction(ratatui::layout::Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(5),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(area);
 
-        let floor = self.state.dungeon.current_floor();
-        let boss = &floor.boss;
-        let header = format!(
-            "BOSS: {} | HP: {}/{} | Gold: {}g  |  Weakness: {}",
-            boss.name, self.state.hp, self.state.max_hp, self.state.gold, boss.weakness,
-        );
-        frame.render_widget(Paragraph::new(header), chunks[0]);
-        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), chunks[1]);
+        // Identical outer vertical + inner horizontal split as render_game.
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        let [left_area, right_area] =
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
+
+        // Use BossHeaderView instead of DungeonView for the header.
+        frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
+
+        // Remaining widgets identical to render_game.
+        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), left_area);
         frame.render_widget(
             score_view::ScoreView::new(
                 &self.state.dice_pool,
                 &self.state.unlocked,
                 &self.state.used_this_room,
             ),
-            chunks[2],
+            right_area,
         );
         frame.render_widget(
-            Paragraph::new(format!(
-                "Target: {}  |  [1-5] Hold  [R] Roll  [S] Score  [Q] Quit",
-                boss.target.required
-            )),
-            chunks[3],
+            Paragraph::new("[1-5] Hold  [R] Roll  [S] Score  [Q] Quit"),
+            hints_area,
         );
     }
 
@@ -365,9 +396,12 @@ impl App {
     }
 
     fn handle_game_over(&mut self, code: KeyCode) -> bool {
-        matches!(code, KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Enter)
-            .then(|| false)
-            .unwrap_or(true)
+        matches!(
+            code,
+            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Enter
+        )
+        .then(|| false)
+        .unwrap_or(true)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
