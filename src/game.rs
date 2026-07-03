@@ -129,7 +129,8 @@ impl GameState {
         let target = match self.dungeon.current_floor().current_room() {
             Some(room::Room::Challenge(x)) => x.required,
             Some(room::Room::Elite(x)) => x.required,
-            None | Some(room::Room::Shop) | Some(room::Room::Rest) => return, //Should be unreachable;
+            None => self.dungeon.current_floor().boss.target.required,
+            Some(room::Room::Shop) | Some(room::Room::Rest) => return,
         };
 
         self.phase = GamePhase::Scored {

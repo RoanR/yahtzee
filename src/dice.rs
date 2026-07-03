@@ -4,7 +4,7 @@
 // current value and held state. DicePool owns the active dice for a room
 // and controls roll/hold flow.
 
-use rand::{Rng, rngs::ThreadRng};
+use rand::{rngs::ThreadRng, Rng};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -30,7 +30,6 @@ impl DieFace {
     pub fn get_value(&self) -> u8 {
         self.value
     }
-
 }
 
 // ─── DieType ──────────────────────────────────────────────────────────────────
@@ -319,7 +318,10 @@ impl DicePool {
     // Sum of enchant bonuses across all dice for the current face values.
     // Added to the final room score after calculate() runs.
     pub fn enchant_bonus_total(&self) -> usize {
-        self.dice.iter().map(|d| d.current_value.enchant.unwrap_or(0)).sum()
+        self.dice
+            .iter()
+            .map(|d| d.current_value.enchant.unwrap_or(0))
+            .sum()
     }
 
     // Add a new die to the pool (e.g. Extra Die Slot relic).
