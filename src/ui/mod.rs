@@ -16,88 +16,220 @@ pub mod score_view;
 use std::time::Duration;
 
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{Terminal, backend::CrosstermBackend};
+use rand::{rngs::ThreadRng, seq::IndexedRandom};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Layout},
+    widgets::Paragraph,
+    Terminal,
+};
 
-use crate::game::{GamePhase, GameState};
+use crate::{
+    dungeon::room,
+    game::{GamePhase, GameState},
+    scoring::ScoreCategory,
+};
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 pub struct App {
     state: GameState,
+    rng: ThreadRng,
+    // The two categories offered after a boss defeat; cleared after unlock.
+    unlock_options: Option<[ScoreCategory; 2]>,
 }
 
 impl App {
     pub fn new(state: GameState) -> Self {
-        Self { state }
+        Self {
+            state,
+            rng: rand::rng(),
+            unlock_options: None,
+        }
     }
 
     // Enter alternate screen, enable raw mode, run the event loop, then clean up.
     pub fn run(&mut self) -> std::io::Result<()> {
-        // enable_raw_mode()
-        // execute!(stdout, EnterAlternateScreen)
-        // let mut terminal = Terminal::new(CrosstermBackend::new(stdout))
-        // loop:
-        //   terminal.draw(|f| self.render(f))
-        //   if event::poll(Duration::from_millis(16)):
-        //     if let Event::Key(key) = event::read():
-        //       if self.handle_key(key.code) == false: break
-        // disable_raw_mode()
-        // execute!(stdout, LeaveAlternateScreen)
-        todo!()
+        enable_raw_mode()?;
+        let mut stdout = std::io::stdout();
+        execute!(stdout, EnterAlternateScreen)?;
+
+        let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
+        loop {
+            terminal.draw(|f| self.render(f))?;
+            if event::poll(Duration::from_millis(16))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press && !self.handle_key(key.code) {
+                        break;
+                    }
+                }
+            }
+        }
+        disable_raw_mode()?;
+        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+        terminal.show_cursor()?;
+        Ok(())
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     // Dispatch to the correct screen renderer based on current phase.
     fn render(&self, frame: &mut ratatui::Frame) {
-        // match &self.state.phase:
-        //   GamePhase::Rolling | GamePhase::Scored { .. } => self.render_game(frame)
-        //   GamePhase::Shop  => self.render_shop(frame)
-        //   GamePhase::Rest  => self.render_rest(frame)
-        //   GamePhase::Boss  => self.render_boss(frame)
-        //   GamePhase::CategoryUnlock => self.render_unlock(frame)
-        //   GamePhase::GameOver => self.render_game_over(frame)
-        todo!()
+        match &self.state.phase {
+            GamePhase::Rolling => self.render_game(frame),
+            GamePhase::Scored { .. } => self.render_scored(frame),
+            GamePhase::Boss => self.render_boss(frame),
+            GamePhase::Shop => self.render_shop(frame),
+            GamePhase::Rest => self.render_rest(frame),
+            GamePhase::CategoryUnlock => self.render_unlock(frame),
+            GamePhase::GameOver => self.render_game_over(frame),
+        }
     }
 
     // Main game screen: header + dice row + score panel + keybind hints.
     fn render_game(&self, frame: &mut ratatui::Frame) {
-        // split area into: header (3 lines), dice row (5 lines), score panel (remainder)
-        // frame.render_widget(DungeonView::new(&self.state), header_area)
-        // frame.render_widget(DiceView::new(&self.state.dice_pool), dice_area)
-        // frame.render_widget(ScoreView::new(&self.state.dice_pool, ...), score_area)
-        // render keybind row at bottom: "[1-5] Hold  [R] Roll  [Q] Quit"
-        todo!()
+        let area = frame.area();
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(5),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ])
+            .split(area);
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), chunks[0]);
+        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), chunks[1]);
+        frame.render_widget(
+            score_view::ScoreView::new(
+                &self.state.dice_pool,
+                &self.state.unlocked,
+                &self.state.used_this_room,
+            ),
+            chunks[2],
+        );
+        frame.render_widget(
+            Paragraph::new("[1-5] Hold  [R] Roll  [S] Score  [Q] Quit"),
+            chunks[3],
+        );
     }
 
-    fn render_shop(&self, _frame: &mut ratatui::Frame) {
-        // list shop items with prices; highlight selected; show gold
-        todo!()
+    // Scored result screen: shown after player scores, before advancing to next room.
+    fn render_scored(&self, frame: &mut ratatui::Frame) {
+        let (score, target, success) = match &self.state.phase {
+            GamePhase::Scored { score, target, success } => (*score, *target, *success),
+            _ => return,
+        };
+
+        let is_boss = self.state.dungeon.current_floor().boss_next();
+
+        let header = if success { "SUCCESS!" } else { "FAILED!" };
+
+        let consequence = if success {
+            if is_boss {
+                "Boss defeated! Choose a new category.".to_string()
+            } else {
+                let gold = match self.state.dungeon.current_floor().current_room() {
+                    Some(room::Room::Challenge(t)) => t.reward_gold,
+                    Some(room::Room::Elite(t)) => t.reward_gold,
+                    _ => 0,
+                };
+                format!("+{}g earned", gold)
+            }
+        } else {
+            let hp_loss = if is_boss { 20 } else { 10 };
+            format!("-{} HP", hp_loss)
+        };
+
+        let text = format!(
+            "{}\nScore: {}  /  Target: {}\n{}\n\nPress any key to continue...",
+            header, score, target, consequence
+        );
+        frame.render_widget(Paragraph::new(text), frame.area());
     }
 
-    fn render_rest(&self, _frame: &mut ratatui::Frame) {
-        // two choices: "Heal 15 HP" / "Upgrade a die"
-        // if upgrade chosen: show die list, then upgrade list
-        todo!()
+    // Boss screen: same layout as render_game but with boss info header.
+    fn render_boss(&self, frame: &mut ratatui::Frame) {
+        let area = frame.area();
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(5),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ])
+            .split(area);
+
+        let floor = self.state.dungeon.current_floor();
+        let boss = &floor.boss;
+        let header = format!(
+            "BOSS: {} | HP: {}/{} | Gold: {}g  |  Weakness: {}",
+            boss.name, self.state.hp, self.state.max_hp, self.state.gold, boss.weakness,
+        );
+        frame.render_widget(Paragraph::new(header), chunks[0]);
+        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), chunks[1]);
+        frame.render_widget(
+            score_view::ScoreView::new(
+                &self.state.dice_pool,
+                &self.state.unlocked,
+                &self.state.used_this_room,
+            ),
+            chunks[2],
+        );
+        frame.render_widget(
+            Paragraph::new(format!(
+                "Target: {}  |  [1-5] Hold  [R] Roll  [S] Score  [Q] Quit",
+                boss.target.required
+            )),
+            chunks[3],
+        );
     }
 
-    fn render_boss(&self, _frame: &mut ratatui::Frame) {
-        // same as render_game but with boss name, weakness, and debuff displayed
-        todo!()
+    fn render_shop(&self, frame: &mut ratatui::Frame) {
+        frame.render_widget(
+            Paragraph::new(format!(
+                "SHOP\nGold: {}g\n\n(Shop items coming soon)\n\n[Any key] Continue  [Q] Quit",
+                self.state.gold
+            )),
+            frame.area(),
+        );
     }
 
-    fn render_unlock(&self, _frame: &mut ratatui::Frame) {
-        // show two category choices; player picks one to unlock
-        todo!()
+    fn render_rest(&self, frame: &mut ratatui::Frame) {
+        frame.render_widget(
+            Paragraph::new(format!(
+                "REST\nHP: {}/{}\n\n[H] Heal 15 HP\n[Q] Quit",
+                self.state.hp, self.state.max_hp
+            )),
+            frame.area(),
+        );
     }
 
-    fn render_game_over(&self, _frame: &mut ratatui::Frame) {
-        // floor reached, final score, prompt to restart or quit
-        todo!()
+    fn render_unlock(&self, frame: &mut ratatui::Frame) {
+        let text = match &self.unlock_options {
+            Some(options) => format!(
+                "BOSS DEFEATED! Choose a new scoring category:\n\n[1] {}\n[2] {}",
+                options[0], options[1]
+            ),
+            None => "All categories unlocked! Press any key to continue.".to_string(),
+        };
+        frame.render_widget(Paragraph::new(text), frame.area());
+    }
+
+    fn render_game_over(&self, frame: &mut ratatui::Frame) {
+        let floor = self.state.dungeon.current_floor();
+        frame.render_widget(
+            Paragraph::new(format!(
+                "GAME OVER\n\nFloor {}\nHP: {}/{}\n\n[Q] or [Enter] to quit",
+                floor.floor_num, self.state.hp, self.state.max_hp
+            )),
+            frame.area(),
+        );
     }
 
     // ── Input ─────────────────────────────────────────────────────────────────
@@ -107,44 +239,190 @@ impl App {
         match &self.state.phase {
             GamePhase::Rolling => self.handle_rolling(code),
             GamePhase::Scored { .. } => self.handle_scored(code),
+            GamePhase::Boss => self.handle_rolling(code),
             GamePhase::Shop => self.handle_shop(code),
             GamePhase::Rest => self.handle_rest(code),
-            GamePhase::Boss => self.handle_rolling(code), // same controls as rolling
             GamePhase::CategoryUnlock => self.handle_unlock(code),
             GamePhase::GameOver => self.handle_game_over(code),
         }
     }
 
     fn handle_rolling(&mut self, code: KeyCode) -> bool {
-        // KeyCode::Char('1'..='5') => state.dice_pool.toggle_hold(index)
-        // KeyCode::Char('r') | KeyCode::Char('R') => state.roll()
-        // KeyCode::Char('s') | KeyCode::Enter => state.score()  (use best category)
-        // KeyCode::Char('q') | KeyCode::Char('Q') => return false
-        todo!()
+        match code {
+            KeyCode::Char(c @ '1'..='5') => {
+                let index = (c as usize) - ('1' as usize);
+                self.state.dice_pool.toggle_hold(index);
+                true
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.state.roll();
+                true
+            }
+            KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
+                self.state.score();
+                true
+            }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
+        }
     }
 
     fn handle_scored(&mut self, _code: KeyCode) -> bool {
-        // any key: advance to next room or transition to shop/rest/boss/unlock
-        todo!()
+        let success = match &self.state.phase {
+            GamePhase::Scored { success, .. } => *success,
+            _ => return true,
+        };
+
+        let is_boss = self.state.dungeon.current_floor().boss_next();
+
+        if is_boss {
+            if success {
+                let options = self.pick_unlock_options();
+                self.unlock_options = options;
+                self.state.defeat_boss();
+            } else {
+                self.state.take_damage(20);
+                if !matches!(self.state.phase, GamePhase::GameOver) {
+                    self.state.begin_room();
+                    self.state.phase = GamePhase::Boss;
+                }
+            }
+            return true;
+        }
+
+        // Regular room: extract reward before mutating.
+        let reward_gold: u32 = if success {
+            match self.state.dungeon.current_floor().current_room() {
+                Some(room::Room::Challenge(t)) => t.reward_gold,
+                Some(room::Room::Elite(t)) => t.reward_gold,
+                _ => 0,
+            }
+        } else {
+            0
+        };
+
+        if success {
+            self.state.earn_gold(reward_gold);
+        } else {
+            self.state.take_damage(10);
+        }
+
+        if matches!(self.state.phase, GamePhase::GameOver) {
+            return true;
+        }
+
+        self.state.dungeon.current_floor_mut().advance();
+        self.transition_after_advance();
+        true
     }
 
-    fn handle_shop(&mut self, _code: KeyCode) -> bool {
-        // arrow keys to navigate items, Enter to buy, Q to leave
-        todo!()
+    fn handle_shop(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => {
+                self.state.dungeon.current_floor_mut().advance();
+                self.transition_after_advance();
+                true
+            }
+        }
     }
 
-    fn handle_rest(&mut self, _code: KeyCode) -> bool {
-        // H to heal, U to upgrade a die; if upgrading, pick die then upgrade
-        todo!()
+    fn handle_rest(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Char('h') | KeyCode::Char('H') => {
+                self.state.heal(15);
+                self.state.dungeon.current_floor_mut().advance();
+                self.transition_after_advance();
+                true
+            }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
+        }
     }
 
-    fn handle_unlock(&mut self, _code: KeyCode) -> bool {
-        // 1 or 2 to pick one of the two offered categories
-        todo!()
+    fn handle_unlock(&mut self, code: KeyCode) -> bool {
+        if self.unlock_options.is_none() {
+            // All categories already unlocked: any key descends.
+            self.state.descend(&mut self.rng);
+            self.state.phase = GamePhase::Rolling;
+            return true;
+        }
+
+        let chosen = match (code, &self.unlock_options) {
+            (KeyCode::Char('1'), Some(opts)) => Some(opts[0].clone()),
+            (KeyCode::Char('2'), Some(opts)) => Some(opts[1].clone()),
+            _ => return true,
+        };
+
+        if let Some(cat) = chosen {
+            self.state.unlock_category(cat);
+            self.unlock_options = None;
+            self.state.descend(&mut self.rng);
+            self.state.phase = GamePhase::Rolling;
+        }
+
+        true
     }
 
     fn handle_game_over(&mut self, code: KeyCode) -> bool {
-        // Q or Enter to quit; R to restart (would reinitialise GameState)
-        todo!()
+        matches!(code, KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Enter)
+            .then(|| false)
+            .unwrap_or(true)
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // Set the correct phase after the floor's current_room index has been advanced.
+    fn transition_after_advance(&mut self) {
+        let (is_shop, is_rest, is_boss_next) =
+            match self.state.dungeon.current_floor().current_room() {
+                Some(room::Room::Shop) => (true, false, false),
+                Some(room::Room::Rest) => (false, true, false),
+                Some(_) => (false, false, false),
+                None => (false, false, true),
+            };
+
+        if is_shop {
+            self.state.phase = GamePhase::Shop;
+        } else if is_rest {
+            self.state.phase = GamePhase::Rest;
+        } else {
+            self.state.begin_room();
+            self.state.phase = if is_boss_next {
+                GamePhase::Boss
+            } else {
+                GamePhase::Rolling
+            };
+        }
+    }
+
+    // Pick two unique categories from those not yet unlocked. Returns None when
+    // fewer than two remain (all categories have been unlocked).
+    fn pick_unlock_options(&mut self) -> Option<[ScoreCategory; 2]> {
+        const ALL_UNLOCKABLE: &[ScoreCategory] = &[
+            ScoreCategory::Ones,
+            ScoreCategory::Twos,
+            ScoreCategory::Threes,
+            ScoreCategory::Fours,
+            ScoreCategory::Fives,
+            ScoreCategory::Sixes,
+            ScoreCategory::FullHouse,
+            ScoreCategory::SmallStraight,
+            ScoreCategory::LargeStraight,
+            ScoreCategory::Yahtzee,
+        ];
+
+        let available: Vec<ScoreCategory> = ALL_UNLOCKABLE
+            .iter()
+            .filter(|c| !self.state.unlocked.contains(c))
+            .cloned()
+            .collect();
+
+        if available.len() < 2 {
+            return None;
+        }
+
+        let chosen: Vec<&ScoreCategory> = available.choose_multiple(&mut self.rng, 2).collect();
+        Some([chosen[0].clone(), chosen[1].clone()])
     }
 }
