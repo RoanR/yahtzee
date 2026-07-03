@@ -1,8 +1,7 @@
 // Dungeon header bar widget.
 //
-// Option A layout - two rows, both always populated:
-//   Row 0: "DUNGEON DICE" (left) | "Floor 2 | Room 1/3 | Gold: 50g" (right)
-//   Row 1: "Target: 80 pts" or "" (left) | HP bar + fraction (right)
+// Row 0: "DUNGEON DICE" (left) | "Floor 2 | Room 1/3 | Gold: 50g" (right)
+// Row 1: "Target: 80 pts" or "" (left) | HP bar + fraction (right)
 //
 // HP is moved off the status line and onto row 1 as a visual bar:
 //   [========-----]  20 / 30
@@ -21,7 +20,6 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    text::ToLine,
     widgets::{Paragraph, Widget},
 };
 
@@ -57,7 +55,11 @@ impl<'a> DungeonView<'a> {
 impl Widget for DungeonView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let floor = self.state.dungeon.current_floor();
-        let room_label = format!("{}/{}", floor.current_room + 1, floor.rooms.len());
+        let room_label = if floor.boss_next() {
+            "Boss".to_string()
+        } else {
+            format!("{}/{}", floor.current_room + 1, floor.rooms.len())
+        };
 
         let status = format!(
             "Floor {} | Room {} | Gold: {}g",
@@ -107,40 +109,36 @@ impl Widget for DungeonView<'_> {
 pub struct BossHeaderView<'a> {
     pub state: &'a GameState,
 }
-impl<'a> Widget for BossHeaderView<'a> {
+
+impl<'a> BossHeaderView<'a> {
+    pub fn new(state: &'a GameState) -> Self {
+        Self { state }
+    }
+}
+
+impl Widget for BossHeaderView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let target = format!("BOSS: {}", self.state.dungeon.current_floor().boss.name);
-        let status = format!(
-            "Floor {} | Gold: {}g",
-            self.state.dungeon.current_floor().floor_num,
-            self.state.gold,
-        );
-        let row_1_left = format!(
-            "Weakness: {} Target: {} pts",
-            self.state.dungeon.current_floor().boss.weakness,
-            self.state.dungeon.current_floor().boss.target.required,
+        let floor = self.state.dungeon.current_floor();
+        let boss_name = format!("BOSS: {}", floor.boss.name);
+        let status = format!("Floor {} | Gold: {}g", floor.floor_num, self.state.gold);
+        let weakness = format!(
+            "Weakness: {}  Target: {} pts",
+            floor.boss.weakness, floor.boss.target.required,
         );
 
-        // Layout: split area into two rows.
         let [header_area, second_area] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(area);
 
-        // Row 0: title left, status right.
         let [title_area, status_area] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(header_area);
 
-        Paragraph::new("DUNGEON DICE").render(title_area, buf);
-        Paragraph::new(status)
-            .right_aligned()
-            .render(status_area, buf);
+        Paragraph::new(boss_name).render(title_area, buf);
+        Paragraph::new(status).right_aligned().render(status_area, buf);
 
-        // Row 1: target left, hp bar right.
-        let [target_area, hp_area] =
+        let [weakness_area, hp_area] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
 
-        Paragraph::new(target).render(target_area, buf);
-        Paragraph::new(bar(self.state))
-            .right_aligned()
-            .render(hp_area, buf);
+        Paragraph::new(weakness).render(weakness_area, buf);
+        Paragraph::new(bar(self.state)).right_aligned().render(hp_area, buf);
     }
 }
