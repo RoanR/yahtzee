@@ -1,16 +1,26 @@
 // Dice display widget.
 //
-// Renders a row of die boxes, one per die in the pool. Each box shows:
-//   top row:    die type label (D6, W6, C6, D8)
-//   middle row: current face value (or "W" for wild), right-aligned
-//   bottom row: "HE" if held, blank otherwise
+// Option A layout: die boxes in the top portion of the area, rolls indicator
+// in the remaining rows below.
 //
-// Example (5 dice, second and fourth held):
 //   +--+ +--+ +--+ +--+ +--+
 //   |D6| |D6| |W6| |D6| |D6|
 //   | 5| | 3| | W| | 6| | 1|
 //   |  | |HE| |  | |HE| |  |
 //   +--+ +--+ +--+ +--+ +--+
+//
+//   Rolls: [##-]   2 / 3
+//
+// The caller must give this widget an area at least DIE_H + 2 rows tall so the
+// rolls indicator fits. render_game allocates Min(0) for the left panel; the
+// indicator uses the first row below the die boxes.
+//
+// Rolls indicator format:
+//   [##-]   2 / 3
+//   ^ bar of max_rolls chars: "#" per remaining roll, "-" per used roll
+//   The bar always shows max_rolls characters.
+//   Example: max=3, remaining=2 -> "[##-]   2 / 3"
+//   Example: max=3, remaining=0 -> "[---]   0 / 3"
 
 use ratatui::{
     buffer::Buffer,
@@ -39,12 +49,20 @@ impl<'a> DiceView<'a> {
 
 impl Widget for DiceView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let dice_height = DIE_H.min(area.height);
+        let rolls_y = area.y + dice_height;
+        let rolls_area = if rolls_y < area.bottom() {
+            Some(Rect::new(area.x, rolls_y, area.width, 1))
+        } else {
+            None
+        };
+
         for (i, die) in self.pool.dice.iter().enumerate() {
             let x = area.x + i as u16 * (DIE_W + GAP);
             if x + DIE_W > area.right() {
                 break;
             }
-            let die_area = Rect::new(x, area.y, DIE_W, DIE_H.min(area.height));
+            let die_area = Rect::new(x, area.y, DIE_W, dice_height);
 
             let lines = vec![
                 Line::from(die.label()),
@@ -60,6 +78,16 @@ impl Widget for DiceView<'_> {
             };
 
             Paragraph::new(lines).block(block).render(die_area, buf);
+        }
+
+        if let Some(rolls_area) = rolls_area {
+            let remaining = self.pool.rolls_remaining as usize;
+            let max = self.pool.max_rolls as usize;
+            let used = max.saturating_sub(remaining);
+            // Used pips first so the bar depletes left-to-right as rolls are spent.
+            let bar = format!("[{}{}]", "#".repeat(used), "-".repeat(remaining));
+            let label = format!("Rolls: {}   {} / {}", bar, remaining, max);
+            Paragraph::new(label).render(rolls_area, buf);
         }
     }
 }
