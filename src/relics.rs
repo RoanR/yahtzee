@@ -58,7 +58,7 @@ pub trait Relic {
 // ─── Concrete relics ──────────────────────────────────────────────────────────
 
 // Loaded Dice: first roll each room rerolls any die showing 1 once for free.
-pub struct LoadedDice;
+struct LoadedDice;
 
 impl Relic for LoadedDice {
     fn name(&self) -> &str {
@@ -81,7 +81,7 @@ impl Relic for LoadedDice {
 
 // Extra Die Slot: adds a 6th die slot when acquired. Applied once at pickup,
 // not through a hook; the shop/pickup code calls pool.add_die directly.
-pub struct ExtraDieSlot;
+struct ExtraDieSlot;
 
 impl Relic for ExtraDieSlot {
     fn name(&self) -> &str {
@@ -95,7 +95,7 @@ impl Relic for ExtraDieSlot {
 }
 
 // One More Roll: +1 roll per room.
-pub struct OneMoreRoll;
+struct OneMoreRoll;
 
 impl Relic for OneMoreRoll {
     fn name(&self) -> &str {
@@ -112,7 +112,7 @@ impl Relic for OneMoreRoll {
 }
 
 // Lucky Horseshoe: failing a target costs 5 HP instead of 10.
-pub struct LuckyHorseshoe;
+struct LuckyHorseshoe;
 
 impl Relic for LuckyHorseshoe {
     fn name(&self) -> &str {
@@ -128,7 +128,7 @@ impl Relic for LuckyHorseshoe {
 }
 
 // Goblin's Hoard: earn +15 bonus gold when beating a target by 150%+.
-pub struct GoblinsHoard;
+struct GoblinsHoard;
 
 impl Relic for GoblinsHoard {
     fn name(&self) -> &str {
@@ -144,7 +144,7 @@ impl Relic for GoblinsHoard {
 }
 
 // Cursed Chalice: -10 max HP; all shop prices 20% cheaper.
-pub struct CursedChalice;
+struct CursedChalice;
 
 impl Relic for CursedChalice {
     fn name(&self) -> &str {
@@ -165,12 +165,12 @@ impl Relic for CursedChalice {
 // Enchanted Quill: once per floor, the best-scoring category fires again even
 // if already used this room. Tracked via the ScoringEngine; this relic exposes
 // a query method the engine checks rather than a hook.
-pub struct EnchantedQuill {
-    pub used_this_floor: bool,
+struct EnchantedQuill {
+    used_this_floor: bool,
 }
 
 impl EnchantedQuill {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             used_this_floor: false,
         }
@@ -178,7 +178,7 @@ impl EnchantedQuill {
 
     // Called by ScoringEngine when it would skip a used category; returns true
     // if the quill should allow it to fire anyway (once per floor).
-    pub fn try_use(&mut self) -> bool {
+    fn try_use(&mut self) -> bool {
         if self.used_this_floor {
             false
         } else {
@@ -202,12 +202,12 @@ impl Relic for EnchantedQuill {
 }
 
 // Shield of the Ancients: the first HP loss each floor is negated.
-pub struct ShieldOfTheAncients {
-    pub used_this_floor: bool,
+struct ShieldOfTheAncients {
+    used_this_floor: bool,
 }
 
 impl ShieldOfTheAncients {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             used_this_floor: false,
         }
@@ -239,19 +239,19 @@ impl Relic for ShieldOfTheAncients {
 // Wizard's Grimoire: once per floor, preview the next roll before committing.
 // The actual preview interaction is driven by the UI layer; this relic just
 // tracks availability and exposes try_use().
-pub struct WizardsGrimoire {
-    pub used_this_floor: bool,
+struct WizardsGrimoire {
+    used_this_floor: bool,
 }
 
 impl WizardsGrimoire {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             used_this_floor: false,
         }
     }
 
     // Returns true (and marks used) if the preview is still available this floor.
-    pub fn try_use(&mut self) -> bool {
+    fn try_use(&mut self) -> bool {
         if self.used_this_floor {
             false
         } else {
@@ -279,10 +279,10 @@ impl Relic for WizardsGrimoire {
 // All relics available to appear in shops and elite rooms.
 // Returns a fresh instance of every relic; the dungeon generator samples this
 // list (excluding relics the player already holds) when populating rooms.
-pub struct RelicRegistry;
+struct RelicRegistry;
 
 impl RelicRegistry {
-    pub fn all() -> Vec<Box<dyn Relic>> {
+    fn all() -> Vec<Box<dyn Relic>> {
         // return one boxed instance of each concrete relic
         vec![
             Box::new(LoadedDice),
