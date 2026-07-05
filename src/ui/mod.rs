@@ -20,7 +20,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::{rngs::ThreadRng, seq::IndexedRandom};
+use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Layout},
@@ -34,6 +34,18 @@ use crate::{
     scoring::ScoreCategory,
 };
 
+// ─── RollAnimation ────────────────────────────────────────────────────────────
+
+// 18 ticks * 16ms ~= 288ms of visible cycling before snapping to the real result.
+const ROLL_ANIM_FRAMES: u8 = 18;
+
+struct RollAnimation {
+    frames_remaining: u8,
+    // Per-die value to display this frame. None = held die (show actual current_value).
+    // Always 1-6; no WILD sentinel during animation.
+    display: Vec<Option<u8>>,
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 pub struct App {
@@ -41,6 +53,7 @@ pub struct App {
     rng: ThreadRng,
     // The two categories offered after a boss defeat; cleared after unlock.
     unlock_options: Option<[ScoreCategory; 2]>,
+    roll_animation: Option<RollAnimation>,
 }
 
 impl App {
@@ -49,6 +62,7 @@ impl App {
             state,
             rng: rand::rng(),
             unlock_options: None,
+            roll_animation: None,
         }
     }
 
@@ -60,6 +74,7 @@ impl App {
 
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
         loop {
+            self.tick_animation();
             terminal.draw(|f| self.render(f))?;
             if event::poll(Duration::from_millis(16))? {
                 if let Event::Key(key) = event::read()? {
@@ -120,7 +135,11 @@ impl App {
         frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
 
         // Render DiceView (die boxes + rolls indicator) into left_area.
-        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), left_area);
+        let dice_widget = match &self.roll_animation {
+            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
+            None => dice_view::DiceView::new(&self.state.dice_pool),
+        };
+        frame.render_widget(dice_widget, left_area);
 
         // Render ScoreView (title + categories) into right_area.
         frame.render_widget(
@@ -206,7 +225,11 @@ impl App {
         frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
 
         // Remaining widgets identical to render_game.
-        frame.render_widget(dice_view::DiceView::new(&self.state.dice_pool), left_area);
+        let dice_widget = match &self.roll_animation {
+            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
+            None => dice_view::DiceView::new(&self.state.dice_pool),
+        };
+        frame.render_widget(dice_widget, left_area);
         frame.render_widget(
             score_view::ScoreView::new(
                 &self.state.dice_pool,
@@ -267,6 +290,10 @@ impl App {
 
     // Handle a key press. Returns false to signal the event loop to exit.
     fn handle_key(&mut self, code: KeyCode) -> bool {
+        // During a roll animation only Q is processed; everything else is ignored.
+        if self.roll_animation.is_some() {
+            return !matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'));
+        }
         match &self.state.phase {
             GamePhase::Rolling => self.handle_rolling(code),
             GamePhase::Scored { .. } => self.handle_scored(code),
@@ -286,7 +313,20 @@ impl App {
                 true
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
-                self.state.roll();
+                if self.state.roll() {
+                    // Roll committed; start display animation.
+                    // Collect held flags before borrowing rng.
+                    let held: Vec<bool> =
+                        self.state.dice_pool.dice.iter().map(|d| d.held).collect();
+                    let display = held
+                        .iter()
+                        .map(|&h| if h { None } else { Some(self.rng.random_range(1u8..=6)) })
+                        .collect();
+                    self.roll_animation = Some(RollAnimation {
+                        frames_remaining: ROLL_ANIM_FRAMES,
+                        display,
+                    });
+                }
                 true
             }
             KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
@@ -405,6 +445,36 @@ impl App {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // Advance the roll animation by one tick (called once per render loop iteration).
+    // When the frame count reaches zero, clears the animation so real values render.
+    fn tick_animation(&mut self) {
+        // Decrement and check completion; borrow of roll_animation ends after this block.
+        let is_active = match self.roll_animation.as_mut() {
+            None => return,
+            Some(anim) => {
+                anim.frames_remaining -= 1;
+                anim.frames_remaining > 0
+            }
+        };
+
+        if !is_active {
+            self.roll_animation = None;
+            return;
+        }
+
+        // Build fresh random display values. Collect held flags first so the
+        // borrow on dice_pool ends before we borrow rng.
+        let held: Vec<bool> = self.state.dice_pool.dice.iter().map(|d| d.held).collect();
+        let new_display: Vec<Option<u8>> = held
+            .iter()
+            .map(|&h| if h { None } else { Some(self.rng.random_range(1u8..=6)) })
+            .collect();
+
+        if let Some(anim) = self.roll_animation.as_mut() {
+            anim.display = new_display;
+        }
+    }
 
     // Set the correct phase after the floor's current_room index has been advanced.
     fn transition_after_advance(&mut self) {
