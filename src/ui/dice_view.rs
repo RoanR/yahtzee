@@ -39,11 +39,17 @@ const GAP: u16 = 1;
 
 pub struct DiceView<'a> {
     pub pool: &'a DicePool,
+    // Per-die animated display value. None = show actual die value (held or no animation).
+    animated_values: Option<&'a [Option<u8>]>,
 }
 
 impl<'a> DiceView<'a> {
     pub fn new(pool: &'a DicePool) -> Self {
-        Self { pool }
+        Self { pool, animated_values: None }
+    }
+
+    pub fn animated(pool: &'a DicePool, values: &'a [Option<u8>]) -> Self {
+        Self { pool, animated_values: Some(values) }
     }
 }
 
@@ -64,10 +70,15 @@ impl Widget for DiceView<'_> {
             }
             let die_area = Rect::new(x, area.y, DIE_W, dice_height);
 
+            let value_str = match self.animated_values.and_then(|v| v.get(i)).copied().flatten() {
+                Some(v) => v.to_string(),
+                None => die.display_value(),
+            };
+
             let lines = vec![
                 Line::from(die.label()),
                 // Right-align value in the 2-char inner width: "| 5|", "| W|"
-                Line::from(format!("{:>2}", die.display_value())),
+                Line::from(format!("{:>2}", value_str)),
                 Line::from(if die.held { "HE" } else { "  " }),
             ];
 
