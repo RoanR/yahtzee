@@ -43,7 +43,7 @@ fn bar(state: &GameState) -> String {
 }
 
 pub struct DungeonView<'a> {
-    pub state: &'a GameState,
+    state: &'a GameState,
 }
 
 impl<'a> DungeonView<'a> {
@@ -107,7 +107,7 @@ impl Widget for DungeonView<'_> {
 // Row 1: "Weakness: <cat>  Target: <n> pts" (left) | HP bar (right)
 //
 pub struct BossHeaderView<'a> {
-    pub state: &'a GameState,
+    state: &'a GameState,
 }
 
 impl<'a> BossHeaderView<'a> {
