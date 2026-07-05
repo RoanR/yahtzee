@@ -36,7 +36,7 @@ impl DieFace {
 
 // Determines which face array a Die is built with and any special roll rules.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DieType {
+enum DieType {
     Standard, // [1, 2, 3, 4, 5, 6]
     Wild,     // [1, 2, 3, 4, 5, WILD] — WILD counts as any value when scoring
     Cursed,   // [1, 1, 1, 2, 5, 6]
@@ -65,8 +65,8 @@ pub enum DieUpgrade {
 
 #[derive(Debug, Clone)]
 pub struct Die {
-    pub die_type: DieType,
-    pub faces: Vec<DieFace>,
+    die_type: DieType,
+    faces: Vec<DieFace>,
     pub current_value: DieFace,
     pub held: bool,
 }
@@ -204,12 +204,12 @@ impl Die {
 
     // ── Hold / state ──────────────────────────────────────────────────────────
 
-    pub fn toggle_hold(&mut self) {
+    fn toggle_hold(&mut self) {
         self.held = !self.held
     }
 
     // True when the die is currently showing a Wild face.
-    pub fn is_wild(&self) -> bool {
+    fn is_wild(&self) -> bool {
         self.current_value.value == WILD
     }
 
