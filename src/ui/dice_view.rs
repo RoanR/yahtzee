@@ -38,7 +38,7 @@ const DIE_H: u16 = 5;
 const GAP: u16 = 1;
 
 pub struct DiceView<'a> {
-    pub pool: &'a DicePool,
+    pool: &'a DicePool,
     // Per-die animated display value. None = show actual die value (held or no animation).
     animated_values: Option<&'a [Option<u8>]>,
 }

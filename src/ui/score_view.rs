@@ -32,9 +32,9 @@ use crate::{
 };
 
 pub struct ScoreView<'a> {
-    pub pool: &'a DicePool,
-    pub unlocked: &'a [ScoreCategory],
-    pub used_this_room: &'a [ScoreCategory],
+    pool: &'a DicePool,
+    unlocked: &'a [ScoreCategory],
+    used_this_room: &'a [ScoreCategory],
 }
 
 impl<'a> ScoreView<'a> {
