@@ -140,7 +140,8 @@ impl App {
 
         // Inner horizontal split inside main_area.
         let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
+            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
+                .areas(main_area);
 
         // Render DungeonView into header_area (2 rows).
         frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
