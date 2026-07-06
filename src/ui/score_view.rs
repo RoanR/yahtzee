@@ -23,7 +23,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style, Stylize},
     text::Line,
-    widgets::{Paragraph, Widget},
+    widgets::{Block, Paragraph, Widget},
 };
 
 use crate::{
@@ -85,6 +85,8 @@ impl Widget for ScoreView<'_> {
             Line::styled(format!("{category:<20} {score_str} {marker}"), style)
         }));
 
-        Paragraph::new(lines).render(area, buf);
+        Paragraph::new(lines)
+            .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded))
+            .render(area, buf);
     }
 }

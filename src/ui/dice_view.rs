@@ -45,11 +45,17 @@ pub struct DiceView<'a> {
 
 impl<'a> DiceView<'a> {
     pub fn new(pool: &'a DicePool) -> Self {
-        Self { pool, animated_values: None }
+        Self {
+            pool,
+            animated_values: None,
+        }
     }
 
     pub fn animated(pool: &'a DicePool, values: &'a [Option<u8>]) -> Self {
-        Self { pool, animated_values: Some(values) }
+        Self {
+            pool,
+            animated_values: Some(values),
+        }
     }
 }
 
@@ -70,7 +76,12 @@ impl Widget for DiceView<'_> {
             }
             let die_area = Rect::new(x, area.y, DIE_W, dice_height);
 
-            let value_str = match self.animated_values.and_then(|v| v.get(i)).copied().flatten() {
+            let value_str = match self
+                .animated_values
+                .and_then(|v| v.get(i))
+                .copied()
+                .flatten()
+            {
                 Some(v) => v.to_string(),
                 None => die.display_value(),
             };

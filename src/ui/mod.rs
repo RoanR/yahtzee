@@ -18,14 +18,16 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    },
 };
-use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
+use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 use ratatui::{
+    Terminal, Viewport,
     backend::CrosstermBackend,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
     widgets::Paragraph,
-    Terminal,
 };
 
 use crate::{
@@ -47,6 +49,9 @@ struct RollAnimation {
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
+
+const MAX_WIDTH: u16 = 80;
+const MAX_HEIGHT: u16 = 24;
 
 pub struct App {
     state: GameState,
@@ -72,7 +77,13 @@ impl App {
         let mut stdout = std::io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
 
-        let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
+        let mut terminal = Terminal::with_options(
+            CrosstermBackend::new(stdout),
+            ratatui::TerminalOptions {
+                viewport: Viewport::Fixed(Rect::new(0, 0, MAX_WIDTH, MAX_HEIGHT)),
+            },
+        )?;
+
         loop {
             self.tick_animation();
             terminal.draw(|f| self.render(f))?;
@@ -129,7 +140,8 @@ impl App {
 
         // Inner horizontal split inside main_area.
         let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
+            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
+                .areas(main_area);
 
         // Render DungeonView into header_area (2 rows).
         frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
@@ -320,7 +332,13 @@ impl App {
                         self.state.dice_pool.dice.iter().map(|d| d.held).collect();
                     let display = held
                         .iter()
-                        .map(|&h| if h { None } else { Some(self.rng.random_range(1u8..=6)) })
+                        .map(|&h| {
+                            if h {
+                                None
+                            } else {
+                                Some(self.rng.random_range(1u8..=6))
+                            }
+                        })
                         .collect();
                     self.roll_animation = Some(RollAnimation {
                         frames_remaining: ROLL_ANIM_FRAMES,
@@ -468,7 +486,13 @@ impl App {
         let held: Vec<bool> = self.state.dice_pool.dice.iter().map(|d| d.held).collect();
         let new_display: Vec<Option<u8>> = held
             .iter()
-            .map(|&h| if h { None } else { Some(self.rng.random_range(1u8..=6)) })
+            .map(|&h| {
+                if h {
+                    None
+                } else {
+                    Some(self.rng.random_range(1u8..=6))
+                }
+            })
             .collect();
 
         if let Some(anim) = self.roll_animation.as_mut() {
