@@ -61,12 +61,12 @@ impl Widget for ScoreView<'_> {
             .filter(|c| !self.used_this_room.contains(c))
             .max_by_key(|c| scoring::calculate_for(c, &values));
 
-        let mut lines: Vec<Line> = vec![Line::from("Scoring").bold(), Line::from("")];
+        let mut lines: Vec<Line> = vec![Line::from("")];
 
         lines.extend(self.unlocked.iter().map(|category| {
             let score_str = match scoring::calculate_for(category, &values) {
-                Some(n) => format!("{:>4}", n),
-                None => "  --".to_string(),
+                Some(n) => format!("{n}"),
+                None => "---".to_string(),
             };
 
             let used = self.used_this_room.contains(category);
@@ -82,11 +82,16 @@ impl Widget for ScoreView<'_> {
 
             let marker = if is_best { "*" } else { " " };
 
-            Line::styled(format!("{category:<20} {score_str} {marker}"), style)
+            let fill = " ".repeat(15 - category.to_string().len());
+            Line::styled(format!(" {category:<12}{fill} {score_str} {marker}"), style)
         }));
 
         Paragraph::new(lines)
-            .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded))
+            .block(
+                Block::bordered()
+                    .border_type(ratatui::widgets::BorderType::Rounded)
+                    .title_top(Line::from("Scoring").bold().centered()),
+            )
             .render(area, buf);
     }
 }
