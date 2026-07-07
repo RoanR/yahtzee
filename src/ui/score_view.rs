@@ -61,7 +61,7 @@ impl Widget for ScoreView<'_> {
             .filter(|c| !self.used_this_room.contains(c))
             .max_by_key(|c| scoring::calculate_for(c, &values));
 
-        let mut lines: Vec<Line> = vec![Line::from("Scoring").bold(), Line::from("")];
+        let mut lines: Vec<Line> = vec![Line::from("")];
 
         lines.extend(self.unlocked.iter().map(|category| {
             let score_str = match scoring::calculate_for(category, &values) {
@@ -86,7 +86,11 @@ impl Widget for ScoreView<'_> {
         }));
 
         Paragraph::new(lines)
-            .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded))
+            .block(
+                Block::bordered()
+                    .border_type(ratatui::widgets::BorderType::Rounded)
+                    .title_top(Line::from("Scoring").bold().centered()),
+            )
             .render(area, buf);
     }
 }
