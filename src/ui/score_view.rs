@@ -65,8 +65,8 @@ impl Widget for ScoreView<'_> {
 
         lines.extend(self.unlocked.iter().map(|category| {
             let score_str = match scoring::calculate_for(category, &values) {
-                Some(n) => format!("{:>4}", n),
-                None => "  --".to_string(),
+                Some(n) => format!("{n}"),
+                None => "---".to_string(),
             };
 
             let used = self.used_this_room.contains(category);
@@ -82,7 +82,8 @@ impl Widget for ScoreView<'_> {
 
             let marker = if is_best { "*" } else { " " };
 
-            Line::styled(format!("{category:<20} {score_str} {marker}"), style)
+            let fill = " ".repeat(15 - category.to_string().len());
+            Line::styled(format!(" {category:<12}{fill} {score_str} {marker}"), style)
         }));
 
         Paragraph::new(lines)
