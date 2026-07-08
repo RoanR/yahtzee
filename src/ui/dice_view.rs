@@ -26,6 +26,7 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Stylize,
+    symbols,
     text::Line,
     widgets::{Block, Paragraph, Widget},
 };
@@ -93,11 +94,15 @@ impl Widget for DiceView<'_> {
                 Line::from(if die.held { "HE" } else { "  " }),
             ];
 
-            let block = if die.held {
+            let mut block = if die.held {
                 Block::bordered().bold()
             } else {
                 Block::bordered()
             };
+
+            if die.selected {
+                block = block.border_set(symbols::border::THICK);
+            }
 
             Paragraph::new(lines).block(block).render(die_area, buf);
         }
