@@ -165,7 +165,9 @@ impl App {
 
         // Render keybind hint into hints_area.
         frame.render_widget(
-            Paragraph::new("[1-5] Hold  [R] Roll  [S] Score  [Q] Quit"),
+            Paragraph::new(
+                "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit",
+            ),
             hints_area,
         );
     }
@@ -251,7 +253,9 @@ impl App {
             right_area,
         );
         frame.render_widget(
-            Paragraph::new("[1-5] Hold  [R] Roll  [S] Score  [Q] Quit"),
+            Paragraph::new(
+                "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit",
+            ),
             hints_area,
         );
     }
@@ -319,9 +323,16 @@ impl App {
 
     fn handle_rolling(&mut self, code: KeyCode) -> bool {
         match code {
-            KeyCode::Char(c @ '1'..='5') => {
-                let index = (c as usize) - ('1' as usize);
-                self.state.dice_pool.toggle_hold(index);
+            KeyCode::Right => {
+                self.state.dice_pool.next_die();
+                true
+            }
+            KeyCode::Left => {
+                self.state.dice_pool.prev_die();
+                true
+            }
+            KeyCode::Char(' ') => {
+                self.state.dice_pool.toggle_selected();
                 true
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
