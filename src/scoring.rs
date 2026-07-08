@@ -240,8 +240,14 @@ mod tests {
     #[test]
     fn test_high_die() {
         assert_eq!(score(ScoreCategory::HighDie, &[3, 1, 5, 2, 4]), Some(5));
-        assert_eq!(score(ScoreCategory::HighDie, &[WILD, 3, WILD, WILD, WILD]), Some(3));
-        assert_eq!(score(ScoreCategory::HighDie, &[WILD, WILD, WILD, WILD, WILD]), Some(0));
+        assert_eq!(
+            score(ScoreCategory::HighDie, &[WILD, 3, WILD, WILD, WILD]),
+            Some(3)
+        );
+        assert_eq!(
+            score(ScoreCategory::HighDie, &[WILD, WILD, WILD, WILD, WILD]),
+            Some(0)
+        );
     }
 
     // Chance: sum all dice; wilds count as 6
@@ -266,16 +272,28 @@ mod tests {
     #[test]
     fn test_fullhouse() {
         assert_eq!(score(ScoreCategory::FullHouse, &[5, 5, 5, 3, 3]), Some(46));
-        assert_eq!(score(ScoreCategory::FullHouse, &[4, 4, 4, 6, WILD]), Some(49));
+        assert_eq!(
+            score(ScoreCategory::FullHouse, &[4, 4, 4, 6, WILD]),
+            Some(49)
+        );
         assert_eq!(score(ScoreCategory::FullHouse, &[1, 2, 3, 4, 5]), None);
     }
 
     // Straights: wilds fill gaps; impossible yields None
     #[test]
     fn test_straights() {
-        assert_eq!(score(ScoreCategory::SmallStraight, &[2, 3, 4, 5, 5]), Some(44));
-        assert_eq!(score(ScoreCategory::LargeStraight, &[1, 2, 3, 4, 5]), Some(55));
-        assert_eq!(score(ScoreCategory::SmallStraight, &[3, 5, 6, 1, WILD]), Some(48));
+        assert_eq!(
+            score(ScoreCategory::SmallStraight, &[2, 3, 4, 5, 5]),
+            Some(44)
+        );
+        assert_eq!(
+            score(ScoreCategory::LargeStraight, &[1, 2, 3, 4, 5]),
+            Some(55)
+        );
+        assert_eq!(
+            score(ScoreCategory::SmallStraight, &[3, 5, 6, 1, WILD]),
+            Some(48)
+        );
         assert_eq!(score(ScoreCategory::SmallStraight, &[1, 1, 6, 6, 6]), None);
     }
 
@@ -283,8 +301,14 @@ mod tests {
     #[test]
     fn test_yahtzee() {
         assert_eq!(score(ScoreCategory::Yahtzee, &[4, 4, 4, 4, 4]), Some(120));
-        assert_eq!(score(ScoreCategory::Yahtzee, &[3, 3, 3, 3, WILD]), Some(115));
-        assert_eq!(score(ScoreCategory::Yahtzee, &[WILD, WILD, WILD, WILD, WILD]), Some(130));
+        assert_eq!(
+            score(ScoreCategory::Yahtzee, &[3, 3, 3, 3, WILD]),
+            Some(115)
+        );
+        assert_eq!(
+            score(ScoreCategory::Yahtzee, &[WILD, WILD, WILD, WILD, WILD]),
+            Some(130)
+        );
         assert_eq!(score(ScoreCategory::Yahtzee, &[1, 2, 3, 4, 5]), None);
     }
 }
