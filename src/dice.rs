@@ -4,7 +4,7 @@
 // current value and held state. DicePool owns the active dice for a room
 // and controls roll/hold flow.
 
-use rand::{rngs::ThreadRng, Rng};
+use rand::{Rng, rngs::ThreadRng};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -69,6 +69,7 @@ pub struct Die {
     faces: Vec<DieFace>,
     pub current_value: DieFace,
     pub held: bool,
+    pub selected: bool,
 }
 
 impl Default for Die {
@@ -85,6 +86,7 @@ impl Default for Die {
             ],
             current_value: DieFace::new(1),
             held: false,
+            selected: false,
         }
     }
 }
@@ -348,5 +350,45 @@ impl DicePool {
         let old = self.dice[index].clone();
         self.dice[index] = die;
         Some(old)
+    }
+
+    pub fn toggle_selected(&mut self) {
+        // Find currently selected dice
+        let cur = self.dice.iter().position(|x| x.selected);
+        //
+        match cur {
+            None => (),
+            Some(x) => self.toggle_hold(x),
+        }
+    }
+
+    pub fn next_die(&mut self) {
+        // Find currently selected dice
+        let cur = self.dice.iter().position(|x| x.selected);
+
+        // Select next dice
+        let next = match cur {
+            None => 0,
+            Some(x) => {
+                self.dice[x].selected = false;
+                if x + 1 < self.dice.len() { x + 1 } else { 0 }
+            }
+        };
+        self.dice[next].selected = true;
+    }
+
+    pub fn prev_die(&mut self) {
+        // Find currently selected dice
+        let cur = self.dice.iter().position(|x| x.selected);
+
+        // Select next dice
+        let next = match cur {
+            None => 0,
+            Some(x) => {
+                self.dice[x].selected = false;
+                if x == 0 { self.dice.len() - 1 } else { x - 1 }
+            }
+        };
+        self.dice[next].selected = true;
     }
 }
