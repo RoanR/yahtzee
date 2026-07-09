@@ -1,31 +1,25 @@
 // Dice display widget.
 //
-// Option A layout: die boxes in the top portion of the area, rolls indicator
-// in the remaining rows below.
+// Layout (6 rows total):
 //
+//    D6   D6   W6   D6   D6     <- die type labels (above boxes)
 //   +--+ +--+ +--+ +--+ +--+
-//   |D6| |D6| |W6| |D6| |D6|
-//   | 5| | 3| | W| | 6| | 1|
-//   |  | |HE| |  | |HE| |  |
+//   | 5| | 3| | W| | 6| | 1|   <- die boxes, 4 wide x 3 tall (value only)
 //   +--+ +--+ +--+ +--+ +--+
+//   EMPTY ROW      EMPTY ROW
 //
 //   Rolls: [##-]   2 / 3
 //
-// The caller must give this widget an area at least DIE_H + 2 rows tall so the
-// rolls indicator fits. render_game allocates Min(0) for the left panel; the
-// indicator uses the first row below the die boxes.
-//
 // Rolls indicator format:
 //   [##-]   2 / 3
-//   ^ bar of max_rolls chars: "#" per remaining roll, "-" per used roll
+//   ^ bar of max_rolls chars: "#" per used roll, "-" per remaining roll
 //   The bar always shows max_rolls characters.
-//   Example: max=3, remaining=2 -> "[##-]   2 / 3"
-//   Example: max=3, remaining=0 -> "[---]   0 / 3"
+//   Example: max=3, remaining=2 -> "[#--]   2 / 3"
+//   Example: max=3, remaining=0 -> "[###]   0 / 3"
 
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Stylize,
     symbols,
     text::Line,
     widgets::{Block, Paragraph, Widget},
@@ -33,9 +27,9 @@ use ratatui::{
 
 use crate::dice::DicePool;
 
-// Each box is 4 wide (border + 2 content + border), 5 tall (border + 3 rows + border).
-const DIE_W: u16 = 4;
-const DIE_H: u16 = 5;
+// Each box is 5 wide (border + 5 content + border), 3 tall (border + value + border).
+const DIE_W: u16 = 5;
+const DIE_H: u16 = 3;
 const GAP: u16 = 1;
 
 pub struct DiceView<'a> {
@@ -62,8 +56,11 @@ impl<'a> DiceView<'a> {
 
 impl Widget for DiceView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let dice_height = DIE_H.min(area.height);
-        let rolls_y = area.y + dice_height;
+        let labels_y = area.y;
+        let boxes_y = area.y + 1;
+        let held_y = boxes_y + DIE_H;
+        let rolls_y = held_y + 1;
+
         let rolls_area = if rolls_y < area.bottom() {
             Some(Rect::new(area.x, rolls_y, area.width, 1))
         } else {
@@ -75,8 +72,15 @@ impl Widget for DiceView<'_> {
             if x + DIE_W > area.right() {
                 break;
             }
-            let die_area = Rect::new(x, area.y, DIE_W, dice_height);
 
+            // Pass 1: die type label above the box.
+            if labels_y < area.bottom() {
+                Paragraph::new(die.label())
+                    .centered()
+                    .render(Rect::new(x, labels_y, DIE_W, 1), buf);
+            }
+
+            // Pass 2: die box with value only.
             let value_str = match self
                 .animated_values
                 .and_then(|v| v.get(i))
@@ -86,25 +90,22 @@ impl Widget for DiceView<'_> {
                 Some(v) => v.to_string(),
                 None => die.display_value(),
             };
-
-            let lines = vec![
-                Line::from(die.label()),
-                // Right-align value in the 2-char inner width: "| 5|", "| W|"
-                Line::from(format!("{:>2}", value_str)),
-                Line::from(if die.held { "HE" } else { "  " }),
-            ];
-
             let mut block = if die.held {
-                Block::bordered().bold()
+                Block::bordered().border_set(symbols::border::DOUBLE)
             } else {
-                Block::bordered()
+                Block::bordered().border_set(symbols::border::PLAIN)
             };
 
             if die.selected {
                 block = block.border_set(symbols::border::THICK);
             }
-
-            Paragraph::new(lines).block(block).render(die_area, buf);
+            let box_height = DIE_H.min(area.bottom().saturating_sub(boxes_y));
+            if box_height > 0 {
+                Paragraph::new(Line::from(format!("{:>2}", value_str)))
+                    .block(block)
+                    .render(Rect::new(x, boxes_y, DIE_W, box_height), buf);
+            }
+            Paragraph::new(Line::from("\n")).render(area, buf);
         }
 
         if let Some(rolls_area) = rolls_area {
