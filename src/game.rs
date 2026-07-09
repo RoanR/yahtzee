@@ -24,6 +24,8 @@ use crate::{
 pub enum GamePhase {
     // Player is rolling and holding dice.
     Rolling,
+    // Player is choosing which category to score.
+    SelectingCategory { cursor: usize, from_boss: bool },
     // All rolls used or player chose to score; show result and advance.
     Scored {
         score: usize,
@@ -107,25 +109,25 @@ impl GameState {
         self.dice_pool.roll_once()
     }
 
-    // Score the current dice: pick the best available unlocked category,
-    // apply enchant bonuses, compare against the room target.
+    // Transition to SelectingCategory so the player can choose which category
+    // to score. Cursor starts at 0 (first available category).
+    pub fn begin_scoring(&mut self) {
+        let from_boss = matches!(self.phase, GamePhase::Boss);
+        self.phase = GamePhase::SelectingCategory { cursor: 0, from_boss };
+    }
+
+    // Score the current dice using an explicitly chosen category.
+    // Applies enchant bonuses, compares against the room target.
     // Transitions phase to Scored.
-    pub fn score(&mut self) {
+    pub fn score_category(&mut self, category: ScoreCategory) {
         let values = self.dice_pool.values();
-        let best_category = self
-            .unlocked
-            .iter()
-            .filter(|&c| !self.used_this_room.contains(c))
-            .max_by_key(|&c| scoring::calculate_for(c, &values))
-            .unwrap_or(&ScoreCategory::HighDie);
-        let score = scoring::calculate_for(&best_category, &values).unwrap_or(0)
+        let score = scoring::calculate_for(&category, &values).unwrap_or(0)
             + self.dice_pool.enchant_bonus_total();
 
-        if *best_category != ScoreCategory::HighDie {
-            self.used_this_room.push(best_category.clone());
+        if category != ScoreCategory::HighDie {
+            self.used_this_room.push(category);
         }
 
-        // compare score vs current room target
         let target = match self.dungeon.current_floor().current_room() {
             Some(room::Room::Challenge(x)) => x.required,
             Some(room::Room::Elite(x)) => x.required,
