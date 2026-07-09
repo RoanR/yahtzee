@@ -107,6 +107,9 @@ impl App {
     fn render(&self, frame: &mut ratatui::Frame) {
         match &self.state.phase {
             GamePhase::Rolling => self.render_game(frame),
+            GamePhase::SelectingCategory { cursor, from_boss } => {
+                self.render_selecting(frame, *cursor, *from_boss)
+            }
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop => self.render_shop(frame),
@@ -260,6 +263,47 @@ impl App {
         );
     }
 
+    fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize, from_boss: bool) {
+        let area = frame.area();
+
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        let [left_area, right_area] =
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
+
+        if from_boss {
+            frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
+        } else {
+            frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        }
+
+        let dice_widget = match &self.roll_animation {
+            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
+            None => dice_view::DiceView::new(&self.state.dice_pool),
+        };
+        frame.render_widget(dice_widget, left_area);
+
+        frame.render_widget(
+            score_view::ScoreView::new(
+                &self.state.dice_pool,
+                &self.state.unlocked,
+                &self.state.used_this_room,
+            )
+            .with_cursor(cursor),
+            right_area,
+        );
+
+        frame.render_widget(
+            Paragraph::new("[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit"),
+            hints_area,
+        );
+    }
+
     fn render_shop(&self, frame: &mut ratatui::Frame) {
         frame.render_widget(
             Paragraph::new(format!(
@@ -312,6 +356,10 @@ impl App {
         }
         match &self.state.phase {
             GamePhase::Rolling => self.handle_rolling(code),
+            GamePhase::SelectingCategory { cursor, .. } => {
+                let cursor = *cursor;
+                self.handle_selecting(code, cursor)
+            }
             GamePhase::Scored { .. } => self.handle_scored(code),
             GamePhase::Boss => self.handle_rolling(code),
             GamePhase::Shop => self.handle_shop(code),
