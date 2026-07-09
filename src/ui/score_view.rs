@@ -35,6 +35,7 @@ pub struct ScoreView<'a> {
     pool: &'a DicePool,
     unlocked: &'a [ScoreCategory],
     used_this_room: &'a [ScoreCategory],
+    cursor: Option<usize>,
 }
 
 impl<'a> ScoreView<'a> {
@@ -47,7 +48,13 @@ impl<'a> ScoreView<'a> {
             pool,
             unlocked,
             used_this_room,
+            cursor: None,
         }
+    }
+
+    pub fn with_cursor(mut self, cursor: usize) -> Self {
+        self.cursor = Some(cursor);
+        self
     }
 }
 
@@ -62,6 +69,7 @@ impl Widget for ScoreView<'_> {
             .max_by_key(|c| scoring::calculate_for(c, &values));
 
         let mut lines: Vec<Line> = vec![Line::from("")];
+        let mut available_idx: usize = 0;
 
         lines.extend(self.unlocked.iter().map(|category| {
             let score_str = match scoring::calculate_for(category, &values) {
@@ -71,16 +79,31 @@ impl Widget for ScoreView<'_> {
 
             let used = self.used_this_room.contains(category);
             let is_best = Some(category) == best;
+            let is_cursor = if used {
+                false
+            } else {
+                let matches = self.cursor == Some(available_idx);
+                available_idx += 1;
+                matches
+            };
 
             let style = if used {
                 Style::new().fg(Color::DarkGray)
+            } else if is_cursor {
+                Style::new().fg(Color::Cyan).bold()
             } else if is_best {
                 Style::new().fg(Color::Yellow).bold()
             } else {
                 Style::new()
             };
 
-            let marker = if is_best { "*" } else { " " };
+            let marker = if is_cursor {
+                "<"
+            } else if is_best {
+                "*"
+            } else {
+                " "
+            };
 
             let fill = " ".repeat(15 - category.to_string().len());
             Line::styled(format!(" {category:<12}{fill} {score_str} {marker}"), style)
