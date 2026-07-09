@@ -407,7 +407,46 @@ impl App {
                 true
             }
             KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
-                self.state.score();
+                self.state.begin_scoring();
+                true
+            }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
+        }
+    }
+
+    fn handle_selecting(&mut self, code: KeyCode, cursor: usize) -> bool {
+        let from_boss = match self.state.phase {
+            GamePhase::SelectingCategory { from_boss, .. } => from_boss,
+            _ => false,
+        };
+
+        let available: Vec<ScoreCategory> = self
+            .state
+            .unlocked
+            .iter()
+            .filter(|c| !self.state.used_this_room.contains(c))
+            .cloned()
+            .collect();
+
+        if available.is_empty() {
+            return true;
+        }
+
+        match code {
+            KeyCode::Up => {
+                let new_cursor = if cursor == 0 { available.len() - 1 } else { cursor - 1 };
+                self.state.phase = GamePhase::SelectingCategory { cursor: new_cursor, from_boss };
+                true
+            }
+            KeyCode::Down => {
+                let new_cursor = if cursor + 1 >= available.len() { 0 } else { cursor + 1 };
+                self.state.phase = GamePhase::SelectingCategory { cursor: new_cursor, from_boss };
+                true
+            }
+            KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
+                let chosen = available[cursor].clone();
+                self.state.score_category(chosen);
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
