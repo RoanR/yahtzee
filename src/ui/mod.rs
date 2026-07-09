@@ -18,16 +18,14 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-    },
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
+use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
 use ratatui::{
-    Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     widgets::Paragraph,
+    Terminal, Viewport,
 };
 
 use crate::{
@@ -435,13 +433,27 @@ impl App {
 
         match code {
             KeyCode::Up => {
-                let new_cursor = if cursor == 0 { available.len() - 1 } else { cursor - 1 };
-                self.state.phase = GamePhase::SelectingCategory { cursor: new_cursor, from_boss };
+                let new_cursor = if cursor == 0 {
+                    available.len() - 1
+                } else {
+                    cursor - 1
+                };
+                self.state.phase = GamePhase::SelectingCategory {
+                    cursor: new_cursor,
+                    from_boss,
+                };
                 true
             }
             KeyCode::Down => {
-                let new_cursor = if cursor + 1 >= available.len() { 0 } else { cursor + 1 };
-                self.state.phase = GamePhase::SelectingCategory { cursor: new_cursor, from_boss };
+                let new_cursor = if cursor + 1 >= available.len() {
+                    0
+                } else {
+                    cursor + 1
+                };
+                self.state.phase = GamePhase::SelectingCategory {
+                    cursor: new_cursor,
+                    from_boss,
+                };
                 true
             }
             KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {

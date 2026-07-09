@@ -25,7 +25,10 @@ pub enum GamePhase {
     // Player is rolling and holding dice.
     Rolling,
     // Player is choosing which category to score.
-    SelectingCategory { cursor: usize, from_boss: bool },
+    SelectingCategory {
+        cursor: usize,
+        from_boss: bool,
+    },
     // All rolls used or player chose to score; show result and advance.
     Scored {
         score: usize,
@@ -113,7 +116,10 @@ impl GameState {
     // to score. Cursor starts at 0 (first available category).
     pub fn begin_scoring(&mut self) {
         let from_boss = matches!(self.phase, GamePhase::Boss);
-        self.phase = GamePhase::SelectingCategory { cursor: 0, from_boss };
+        self.phase = GamePhase::SelectingCategory {
+            cursor: 0,
+            from_boss,
+        };
     }
 
     // Score the current dice using an explicitly chosen category.
