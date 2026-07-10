@@ -23,7 +23,10 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
-use crate::{dungeon::room::Room, game::GameState};
+use crate::{
+    dungeon::room::{Room, ScoreTarget},
+    game::{GamePhase, GameState},
+};
 
 // Width of the HP bar in characters (excluding brackets).
 const BAR_WIDTH: usize = 15;
@@ -66,10 +69,13 @@ impl Widget for DungeonView<'_> {
             floor.floor_num, room_label, self.state.gold,
         );
 
-        let target_line = match floor.current_room() {
-            Some(Room::Challenge(t)) => Some(format!("Target: {} pts", t.required)),
-            Some(Room::Elite(t)) => Some(format!("Elite target: {} pts", t.required)),
-            _ => None,
+        let target_line = match self.state.phase {
+            GamePhase::Scored { score, target, .. } => Some(format!("Score {score}/{target}")),
+            _ => match floor.current_room() {
+                Some(Room::Challenge(t)) => Some(format!("Target: {} pts", t.required)),
+                Some(Room::Elite(t)) => Some(format!("Elite target: {} pts", t.required)),
+                _ => None,
+            },
         };
 
         // Layout: split area into two rows.
@@ -80,7 +86,16 @@ impl Widget for DungeonView<'_> {
         let [title_area, status_area] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(header_area);
 
-        Paragraph::new("DUNGEON DICE").render(title_area, buf);
+        match self.state.phase {
+            GamePhase::Scored { success, .. } => {
+                if success {
+                    Paragraph::new("SUCCESS").render(title_area, buf)
+                } else {
+                    Paragraph::new("FAILED").render(title_area, buf)
+                }
+            }
+            _ => Paragraph::new("DUNGEON DICE").render(title_area, buf),
+        };
         Paragraph::new(status)
             .right_aligned()
             .render(status_area, buf);
