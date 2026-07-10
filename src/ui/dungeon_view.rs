@@ -148,12 +148,16 @@ impl Widget for BossHeaderView<'_> {
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(header_area);
 
         Paragraph::new(boss_name).render(title_area, buf);
-        Paragraph::new(status).right_aligned().render(status_area, buf);
+        Paragraph::new(status)
+            .right_aligned()
+            .render(status_area, buf);
 
         let [weakness_area, hp_area] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
 
         Paragraph::new(weakness).render(weakness_area, buf);
-        Paragraph::new(bar(self.state)).right_aligned().render(hp_area, buf);
+        Paragraph::new(bar(self.state))
+            .right_aligned()
+            .render(hp_area, buf);
     }
 }
