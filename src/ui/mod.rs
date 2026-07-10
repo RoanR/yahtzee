@@ -18,14 +18,15 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
+use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 use ratatui::{
+    Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
-    widgets::Paragraph,
-    Terminal, Viewport,
+    text::Line,
+    widgets::{Block, Paragraph, Widget},
 };
 
 use crate::{
@@ -174,6 +175,11 @@ impl App {
     }
 
     // Scored result screen: shown after player scores, before advancing to next room.
+    // Loot screen - layout:
+    //
+    //   [header]  Length(2)  DungeonView (title + status row 0, target + HP bar row 1)
+    //   [loot]    Central    loot box
+    //   [hints]   Length(1)  keybind line
     fn render_scored(&self, frame: &mut ratatui::Frame) {
         let (score, target, success) = match &self.state.phase {
             GamePhase::Scored {
@@ -184,31 +190,42 @@ impl App {
             _ => return,
         };
 
+        // Vertical Division
+        let [header_area, loot_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(frame.area());
+
+        // Render DungeonView into header_area (2 rows)
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+
+        // Central loot area or HP loss
         let is_boss = self.state.dungeon.current_floor().boss_next();
-
-        let header = if success { "SUCCESS!" } else { "FAILED!" };
-
         let consequence = if success {
             if is_boss {
-                "Boss defeated! Choose a new category.".to_string()
+                "\nBoss defeated! Choose a new category.".to_string()
             } else {
                 let gold = match self.state.dungeon.current_floor().current_room() {
                     Some(room::Room::Challenge(t)) => t.reward_gold,
                     Some(room::Room::Elite(t)) => t.reward_gold,
                     _ => 0,
                 };
-                format!("+{}g earned", gold)
+                format!("\n+{}g earned", gold)
             }
         } else {
             let hp_loss = if is_boss { 20 } else { 10 };
-            format!("-{} HP", hp_loss)
+            format!("\n-{} HP", hp_loss)
         };
-
-        let text = format!(
-            "{}\nScore: {}  /  Target: {}\n{}\n\nPress any key to continue...",
-            header, score, target, consequence
+        frame.render_widget(
+            Paragraph::new(Line::from(consequence).centered())
+                .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded)),
+            loot_area,
         );
-        frame.render_widget(Paragraph::new(text), frame.area());
+
+        // Hints area
+        frame.render_widget(Paragraph::new("Press any key to continue..."), hints_area);
     }
 
     // Boss screen layout:
