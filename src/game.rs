@@ -11,8 +11,8 @@ use rand::Rng;
 use crate::{
     dice::{DicePool, DieUpgrade},
     dungeon::{
-        room::{self},
         Dungeon,
+        room::{self},
     },
     relics::Relic,
     scoring::{self, ScoreCategory},
