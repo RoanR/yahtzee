@@ -138,7 +138,7 @@ impl GameState {
             Some(room::Room::Challenge(x)) => x.required,
             Some(room::Room::Elite(x)) => x.required,
             None => self.dungeon.current_floor().boss.target.required,
-            Some(room::Room::Shop) | Some(room::Room::Rest) => return,
+            Some(room::Room::Rest) => return,
         };
 
         self.phase = GamePhase::Scored {
