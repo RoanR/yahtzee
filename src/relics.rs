@@ -10,8 +10,6 @@
 // RelicRegistry holds all relics that can appear in shops / elite rewards.
 // The dungeon generator samples from it when populating rooms.
 
-use rand::seq::SliceRandom;
-
 use crate::dice::DicePool;
 
 // ─── Relic trait ──────────────────────────────────────────────────────────────
@@ -276,30 +274,24 @@ impl Relic for WizardsGrimoire {
 
 // ─── RelicRegistry ────────────────────────────────────────────────────────────
 
-// All relics available to appear in shops and elite rooms.
-// Returns a fresh instance of every relic; the dungeon generator samples this
-// list (excluding relics the player already holds) when populating rooms.
-struct RelicRegistry;
-
-impl RelicRegistry {
-    fn all() -> Vec<Box<dyn Relic>> {
-        // return one boxed instance of each concrete relic
-        vec![
-            Box::new(LoadedDice),
-            Box::new(ExtraDieSlot),
-            Box::new(OneMoreRoll),
-            Box::new(LuckyHorseshoe),
-            Box::new(GoblinsHoard),
-            Box::new(CursedChalice),
-            Box::new(EnchantedQuill {
-                used_this_floor: false,
-            }),
-            Box::new(ShieldOfTheAncients {
-                used_this_floor: false,
-            }),
-            Box::new(WizardsGrimoire {
-                used_this_floor: false,
-            }),
-        ]
-    }
+// Returns one fresh instance of every relic. Callers filter out already-held
+// relics (by name) before sampling.
+pub fn all_relics() -> Vec<Box<dyn Relic>> {
+    vec![
+        Box::new(LoadedDice),
+        Box::new(ExtraDieSlot),
+        Box::new(OneMoreRoll),
+        Box::new(LuckyHorseshoe),
+        Box::new(GoblinsHoard),
+        Box::new(CursedChalice),
+        Box::new(EnchantedQuill {
+            used_this_floor: false,
+        }),
+        Box::new(ShieldOfTheAncients {
+            used_this_floor: false,
+        }),
+        Box::new(WizardsGrimoire {
+            used_this_floor: false,
+        }),
+    ]
 }
