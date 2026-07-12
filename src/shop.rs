@@ -7,10 +7,9 @@
 // Prices are computed at generation time and reflect any shop_price_multiplier
 // bonuses the player has from relics (e.g. Cursed Chalice: 0.8x).
 
-use rand::Rng;
+use rand::{Rng, seq::SliceRandom};
 
 use crate::{
-    dice::Die,
     game::GameState,
     relics::{self, Relic},
 };
@@ -46,45 +45,42 @@ impl SpecialDieKind {
         }
     }
 
-    pub fn create_die(&self) -> Die {
+    pub fn create_die(&self) -> crate::dice::Die {
         match self {
-            SpecialDieKind::Wild => Die::wild(),
-            SpecialDieKind::Cursed => Die::cursed(),
-            SpecialDieKind::Bones => Die::bones(),
+            SpecialDieKind::Wild => crate::dice::Die::wild(),
+            SpecialDieKind::Cursed => crate::dice::Die::cursed(),
+            SpecialDieKind::Bones => crate::dice::Die::bones(),
         }
     }
 }
 
 // ─── ShopItem ─────────────────────────────────────────────────────────────────
 
-pub enum ShopItem {
-    Relic(Box<dyn Relic>, u32),
-    SpecialDie(SpecialDieKind, u32),
-    HpPotion(u32, u32), // (heal_amount, price)
+pub struct ShopItem {
+    pub kind: ShopItemKind,
+    pub price: u32,
+}
+
+pub enum ShopItemKind {
+    Relic(Box<dyn Relic>),
+    SpecialDie(SpecialDieKind),
+    HpPotion(u32), // heal amount
 }
 
 impl ShopItem {
     pub fn name(&self) -> &str {
-        match self {
-            ShopItem::Relic(r, _) => r.name(),
-            ShopItem::SpecialDie(k, _) => k.name(),
-            ShopItem::HpPotion(_, _) => "HP Potion",
+        match &self.kind {
+            ShopItemKind::Relic(r) => r.name(),
+            ShopItemKind::SpecialDie(k) => k.name(),
+            ShopItemKind::HpPotion(_) => "HP Potion",
         }
     }
 
     pub fn description(&self) -> String {
-        match self {
-            ShopItem::Relic(r, _) => r.description().to_string(),
-            ShopItem::SpecialDie(k, _) => k.description().to_string(),
-            ShopItem::HpPotion(amt, _) => format!("Restore {} HP", amt),
-        }
-    }
-
-    pub fn price(&self) -> u32 {
-        match self {
-            ShopItem::Relic(_, p) => *p,
-            ShopItem::SpecialDie(_, p) => *p,
-            ShopItem::HpPotion(_, p) => *p,
+        match &self.kind {
+            ShopItemKind::Relic(r) => r.description().to_string(),
+            ShopItemKind::SpecialDie(k) => k.description().to_string(),
+            ShopItemKind::HpPotion(amt) => format!("Restore {} HP", amt),
         }
     }
 }
@@ -105,37 +101,27 @@ pub fn generate_shop_items(state: &GameState, rng: &mut impl Rng) -> Vec<ShopIte
         .into_iter()
         .filter(|r| !owned_names.contains(&r.name()))
         .collect();
+    candidates.shuffle(rng);
 
-    let mut items: Vec<ShopItem> = Vec::new();
-
-    // Pick up to 2 random relics.
-    for _ in 0..2 {
-        if candidates.is_empty() {
-            break;
-        }
-        let idx = rng.random_range(0..candidates.len());
-        let relic = candidates.remove(idx);
-        items.push(ShopItem::Relic(relic, price(RELIC_BASE_PRICE)));
-    }
+    let mut items: Vec<ShopItem> = candidates
+        .into_iter()
+        .take(2)
+        .map(|r| ShopItem { kind: ShopItemKind::Relic(r), price: price(RELIC_BASE_PRICE) })
+        .collect();
 
     // Offer a random special die only if a standard die exists to replace.
-    let has_standard_die = state
-        .dice_pool
-        .dice
-        .iter()
-        .any(|d| d.label() == "D6");
-    if has_standard_die {
+    if state.dice_pool.has_standard_die() {
         let kind = match rng.random_range(0..3u8) {
             0 => SpecialDieKind::Wild,
             1 => SpecialDieKind::Cursed,
             _ => SpecialDieKind::Bones,
         };
-        items.push(ShopItem::SpecialDie(kind, price(SPECIAL_DIE_BASE_PRICE)));
+        items.push(ShopItem { kind: ShopItemKind::SpecialDie(kind), price: price(SPECIAL_DIE_BASE_PRICE) });
     }
 
     // HP potion only when player is missing HP.
     if state.hp < state.max_hp {
-        items.push(ShopItem::HpPotion(HP_POTION_HEAL, price(HP_POTION_BASE_PRICE)));
+        items.push(ShopItem { kind: ShopItemKind::HpPotion(HP_POTION_HEAL), price: price(HP_POTION_BASE_PRICE) });
     }
 
     items
