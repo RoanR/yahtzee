@@ -27,13 +27,14 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     text::Line,
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Paragraph},
 };
 
 use crate::{
     dungeon::room,
     game::{GamePhase, GameState},
     scoring::ScoreCategory,
+    shop,
 };
 
 // ─── RollAnimation ────────────────────────────────────────────────────────────
@@ -112,7 +113,7 @@ impl App {
             }
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_boss(frame),
-            GamePhase::Shop => self.render_shop(frame),
+            GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
             GamePhase::Rest => self.render_rest(frame),
             GamePhase::CategoryUnlock => self.render_unlock(frame),
             GamePhase::GameOver => self.render_game_over(frame),
@@ -182,7 +183,7 @@ impl App {
     //   [loot]    Central    loot box
     //   [hints]   Length(1)  keybind line
     fn render_scored(&self, frame: &mut ratatui::Frame) {
-        let (score, target, success) = match &self.state.phase {
+        let (_score, _target, success) = match &self.state.phase {
             GamePhase::Scored {
                 score,
                 target,
@@ -320,13 +321,26 @@ impl App {
         );
     }
 
-    fn render_shop(&self, frame: &mut ratatui::Frame) {
+    fn render_shop(&self, frame: &mut ratatui::Frame, items: &[shop::ShopItem], cursor: usize) {
+        let area = frame.area();
+
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+
         frame.render_widget(
-            Paragraph::new(format!(
-                "SHOP\nGold: {}g\n\n(Shop items coming soon)\n\n[Any key] Continue  [Q] Quit",
-                self.state.gold
-            )),
-            frame.area(),
+            shop_view::ShopView::new(items, self.state.gold, cursor),
+            main_area,
+        );
+
+        frame.render_widget(
+            Paragraph::new("[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit"),
+            hints_area,
         );
     }
 
@@ -378,7 +392,10 @@ impl App {
             }
             GamePhase::Scored { .. } => self.handle_scored(code),
             GamePhase::Boss => self.handle_rolling(code),
-            GamePhase::Shop => self.handle_shop(code),
+            GamePhase::Shop { cursor, .. } => {
+                let cursor = *cursor;
+                self.handle_shop(code, cursor)
+            }
             GamePhase::Rest => self.handle_rest(code),
             GamePhase::CategoryUnlock => self.handle_unlock(code),
             GamePhase::GameOver => self.handle_game_over(code),
@@ -528,19 +545,70 @@ impl App {
             return true;
         }
 
-        self.state.dungeon.current_floor_mut().advance();
-        self.transition_after_advance();
+        if success {
+            let items = shop::generate_shop_items(&self.state, &mut self.rng);
+            self.state.phase = GamePhase::Shop { items, cursor: 0 };
+        } else {
+            self.state.dungeon.current_floor_mut().advance();
+            self.transition_after_advance();
+        }
         true
     }
 
-    fn handle_shop(&mut self, code: KeyCode) -> bool {
+    fn handle_shop(&mut self, code: KeyCode, cursor: usize) -> bool {
+        let items_len = match &self.state.phase {
+            GamePhase::Shop { items, .. } => items.len(),
+            _ => return true,
+        };
+
         match code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => {
+            KeyCode::Up => {
+                let new_cursor = if cursor == 0 {
+                    items_len.saturating_sub(1)
+                } else {
+                    cursor - 1
+                };
+                if let GamePhase::Shop { cursor, .. } = &mut self.state.phase {
+                    *cursor = new_cursor;
+                }
+                true
+            }
+            KeyCode::Down => {
+                let new_cursor = if items_len == 0 || cursor + 1 >= items_len {
+                    0
+                } else {
+                    cursor + 1
+                };
+                if let GamePhase::Shop { cursor, .. } = &mut self.state.phase {
+                    *cursor = new_cursor;
+                }
+                true
+            }
+            KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
+                let item = match &mut self.state.phase {
+                    GamePhase::Shop { items, cursor } if *cursor < items.len() => {
+                        Some(items.remove(*cursor))
+                    }
+                    _ => None,
+                };
+                if let Some(item) = item {
+                    self.state.buy_shop_item(item);
+                    // Clamp cursor if it's now past the end.
+                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase {
+                        if *cursor >= items.len() && !items.is_empty() {
+                            *cursor = items.len() - 1;
+                        }
+                    }
+                }
+                true
+            }
+            KeyCode::Char('l') | KeyCode::Char('L') | KeyCode::Esc => {
                 self.state.dungeon.current_floor_mut().advance();
                 self.transition_after_advance();
                 true
             }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
         }
     }
 
@@ -630,25 +698,19 @@ impl App {
 
     // Set the correct phase after the floor's current_room index has been advanced.
     fn transition_after_advance(&mut self) {
-        let (is_shop, is_rest, is_boss_next) =
-            match self.state.dungeon.current_floor().current_room() {
-                Some(room::Room::Shop) => (true, false, false),
-                Some(room::Room::Rest) => (false, true, false),
-                Some(_) => (false, false, false),
-                None => (false, false, true),
-            };
-
-        if is_shop {
-            self.state.phase = GamePhase::Shop;
-        } else if is_rest {
-            self.state.phase = GamePhase::Rest;
-        } else {
-            self.state.begin_room();
-            self.state.phase = if is_boss_next {
-                GamePhase::Boss
-            } else {
-                GamePhase::Rolling
-            };
+        match self.state.dungeon.current_floor().current_room() {
+            Some(room::Room::Rest) => {
+                self.state.phase = GamePhase::Rest;
+            }
+            Some(_) | None => {
+                let is_boss_next = self.state.dungeon.current_floor().boss_next();
+                self.state.begin_room();
+                self.state.phase = if is_boss_next {
+                    GamePhase::Boss
+                } else {
+                    GamePhase::Rolling
+                };
+            }
         }
     }
 
