@@ -12,6 +12,7 @@
 pub mod dice_view;
 pub mod dungeon_view;
 pub mod score_view;
+pub mod shop_view;
 
 use std::time::Duration;
 
