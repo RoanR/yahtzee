@@ -3,6 +3,7 @@ mod dungeon;
 mod game;
 mod relics;
 mod scoring;
+mod shop;
 mod ui;
 
 fn main() {

@@ -340,6 +340,28 @@ impl DicePool {
         }
     }
 
+    // True when at least one die in the pool is a Standard d6.
+    pub fn has_standard_die(&self) -> bool {
+        self.dice
+            .iter()
+            .any(|d| matches!(d.die_type, DieType::Standard))
+    }
+
+    // Replace the first Standard die with a new die (shop purchase).
+    // Returns false if no standard die exists in the pool.
+    pub fn replace_first_standard_die(&mut self, replacement: Die) -> bool {
+        if let Some(idx) = self
+            .dice
+            .iter()
+            .position(|d| matches!(d.die_type, DieType::Standard))
+        {
+            self.dice[idx] = replacement;
+            true
+        } else {
+            false
+        }
+    }
+
     // Replace a die at index with a new die (e.g. buying a special die in shop).
     pub fn replace_die(&mut self, index: usize, die: Die) -> Option<Die> {
         // bounds-check

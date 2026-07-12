@@ -24,7 +24,7 @@ use ratatui::{
 };
 
 use crate::{
-    dungeon::room::{Room, ScoreTarget},
+    dungeon::room::Room,
     game::{GamePhase, GameState},
 };
 

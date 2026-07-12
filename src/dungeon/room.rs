@@ -47,8 +47,6 @@ pub enum Room {
     Challenge(ScoreTarget),
     // Harder optional room: better gold + chance of a rare relic.
     Elite(ScoreTarget),
-    // Spend gold on relics, special dice, or die upgrades.
-    Shop,
     // Choose: restore 15 HP or upgrade one die in your pool.
     Rest,
 }

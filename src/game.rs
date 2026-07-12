@@ -16,6 +16,7 @@ use crate::{
     },
     relics::Relic,
     scoring::{self, ScoreCategory},
+    shop::{ShopItem, ShopItemKind},
 };
 
 // ─── GamePhase ────────────────────────────────────────────────────────────────
@@ -37,8 +38,11 @@ pub enum GamePhase {
     },
     // Boss fight in progress.
     Boss,
-    // Player is in a shop room.
-    Shop,
+    // Player is browsing the shop after a successful fight.
+    Shop {
+        items: Vec<ShopItem>,
+        cursor: usize,
+    },
     // Player is at a campfire: pick heal or upgrade.
     Rest,
     // Player just defeated a boss; pick a new category to unlock.
@@ -138,7 +142,7 @@ impl GameState {
             Some(room::Room::Challenge(x)) => x.required,
             Some(room::Room::Elite(x)) => x.required,
             None => self.dungeon.current_floor().boss.target.required,
-            Some(room::Room::Shop) | Some(room::Room::Rest) => return,
+            Some(room::Room::Rest) => return,
         };
 
         self.phase = GamePhase::Scored {
@@ -201,11 +205,29 @@ impl GameState {
 
     // ── Relic management ──────────────────────────────────────────────────────
 
-    // Acquire a relic: add it to the list and apply one-time stat modifiers.
+    // Acquire a relic: apply one-time effects, then add it to the list.
     pub fn acquire_relic(&mut self, relic: Box<dyn Relic>) {
+        relic.on_acquire(&mut self.dice_pool);
         self.max_hp = (self.max_hp as i32 + relic.max_hp_modifier()).max(1) as u32;
         self.hp = self.hp.min(self.max_hp);
         self.relics.push(relic);
+    }
+
+    // ── Shop ──────────────────────────────────────────────────────────────────
+
+    // Attempt to purchase a shop item. Returns false if the player cannot afford it.
+    pub fn buy_shop_item(&mut self, item: ShopItem) -> bool {
+        if !self.spend_gold(item.price) {
+            return false;
+        }
+        match item.kind {
+            ShopItemKind::Relic(relic) => self.acquire_relic(relic),
+            ShopItemKind::SpecialDie(kind) => {
+                self.dice_pool.replace_first_standard_die(kind.create_die());
+            }
+            ShopItemKind::HpPotion(amount) => self.heal(amount),
+        }
+        true
     }
 
     // ── Die management ────────────────────────────────────────────────────────

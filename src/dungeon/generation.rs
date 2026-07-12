@@ -10,7 +10,7 @@
 //   boss     = base * 2
 //
 // Room weights (3 rooms per floor):
-//   50% Challenge, 20% Elite, 15% Shop, 15% Rest
+//   55% Challenge, 20% Elite, 25% Rest
 
 use rand::Rng;
 
@@ -98,11 +98,9 @@ fn boss_for_floor(floor_num: usize) -> BossRoom {
 
 // Pick a single non-boss room type from the weighted pool.
 fn random_room(floor_num: usize, rng: &mut impl Rng) -> Room {
-    let value = rng.random_range(0..100);
-    match value {
-        50..70 => Room::Elite(elite_target(floor_num)),
-        70..85 => Room::Shop,
-        85..100 => Room::Rest,
+    match rng.random_range(0..100) {
+        55..75 => Room::Elite(elite_target(floor_num)),
+        75..100 => Room::Rest,
         _ => Room::Challenge(challenge_target(floor_num)),
     }
 }
