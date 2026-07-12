@@ -105,8 +105,7 @@ impl Widget for ScoreView<'_> {
                 " "
             };
 
-            let fill = " ".repeat(15 - category.to_string().len());
-            Line::styled(format!(" {category:<12}{fill} {score_str} {marker}"), style)
+            Line::styled(format!(" {category:<15} {score_str} {marker}"), style)
         }));
 
         Paragraph::new(lines)
