@@ -168,12 +168,12 @@ impl App {
         );
 
         // Render keybind hint into hints_area.
-        frame.render_widget(
-            Paragraph::new(
-                "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit",
-            ),
-            hints_area,
-        );
+        let hint = if self.state.dice_pool.max_rolls == self.state.dice_pool.rolls_remaining {
+            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [Q] Quit"
+        } else {
+            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
+        };
+        frame.render_widget(Paragraph::new(hint), hints_area);
     }
 
     // Scored result screen: shown after player scores, before advancing to next room.
