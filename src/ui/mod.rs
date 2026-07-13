@@ -440,7 +440,9 @@ impl App {
                 true
             }
             KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
-                self.state.begin_scoring();
+                if self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining {
+                    self.state.begin_scoring();
+                }
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
