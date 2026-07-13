@@ -17,6 +17,8 @@
 //   "Chance                21  "   <- Some(21)
 //   "Small straight         --  "  <- None (impossible)
 //   "Fives                  0  "   <- Some(0)  (no 5s showing, but still valid)
+//
+// If the player hasn't rolled yet just display "--" for each unlocked category
 
 use ratatui::{
     buffer::Buffer,
@@ -60,6 +62,21 @@ impl<'a> ScoreView<'a> {
 
 impl Widget for ScoreView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = Block::bordered()
+            .border_type(ratatui::widgets::BorderType::Rounded)
+            .title_top(Line::from("Scoring").bold().centered());
+
+        if self.pool.rolls_remaining == self.pool.max_rolls {
+            let mut lines = vec![Line::from("")];
+            lines.extend(
+                self.unlocked
+                    .iter()
+                    .map(|category| Line::from(format!(" {category:<15} --"))),
+            );
+            Paragraph::new(lines).block(block).render(area, buf);
+            return;
+        }
+
         let values = self.pool.values();
 
         let best = self
@@ -74,7 +91,7 @@ impl Widget for ScoreView<'_> {
         lines.extend(self.unlocked.iter().map(|category| {
             let score_str = match scoring::calculate_for(category, &values) {
                 Some(n) => format!("{n}"),
-                None => "---".to_string(),
+                None => "--".to_string(),
             };
 
             let used = self.used_this_room.contains(category);
@@ -108,12 +125,6 @@ impl Widget for ScoreView<'_> {
             Line::styled(format!(" {category:<15} {score_str} {marker}"), style)
         }));
 
-        Paragraph::new(lines)
-            .block(
-                Block::bordered()
-                    .border_type(ratatui::widgets::BorderType::Rounded)
-                    .title_top(Line::from("Scoring").bold().centered()),
-            )
-            .render(area, buf);
+        Paragraph::new(lines).block(block).render(area, buf);
     }
 }
