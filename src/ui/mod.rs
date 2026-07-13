@@ -168,12 +168,7 @@ impl App {
         );
 
         // Render keybind hint into hints_area.
-        frame.render_widget(
-            Paragraph::new(
-                "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit",
-            ),
-            hints_area,
-        );
+        frame.render_widget(Paragraph::new(self.roll_hint()), hints_area);
     }
 
     // Scored result screen: shown after player scores, before advancing to next room.
@@ -272,12 +267,7 @@ impl App {
             ),
             right_area,
         );
-        frame.render_widget(
-            Paragraph::new(
-                "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit",
-            ),
-            hints_area,
-        );
+        frame.render_widget(Paragraph::new(self.roll_hint()), hints_area);
     }
 
     fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize, from_boss: bool) {
@@ -440,7 +430,9 @@ impl App {
                 true
             }
             KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
-                self.state.begin_scoring();
+                if self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining {
+                    self.state.begin_scoring();
+                }
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
@@ -659,6 +651,14 @@ impl App {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    fn roll_hint(&self) -> &'static str {
+        if self.state.dice_pool.rolls_remaining == self.state.dice_pool.max_rolls {
+            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [Q] Quit"
+        } else {
+            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
+        }
+    }
 
     // Advance the roll animation by one tick (called once per render loop iteration).
     // When the frame count reaches zero, clears the animation so real values render.
