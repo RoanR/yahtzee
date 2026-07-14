@@ -20,7 +20,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Style, Styled, Stylize},
+    style::{Style, Stylize},
     symbols,
     text::Line,
     widgets::{Block, Paragraph, Widget},
