@@ -8,7 +8,7 @@
 pub mod generation;
 pub mod room;
 
-use rand::{Rng, seq::IndexedRandom};
+use rand::Rng;
 use room::{BossRoom, Room};
 
 use crate::dungeon::generation::generate_floor;

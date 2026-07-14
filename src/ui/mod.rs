@@ -393,20 +393,23 @@ impl App {
     }
 
     fn handle_rolling(&mut self, code: KeyCode) -> bool {
-        match code {
-            KeyCode::Right => {
+        match (
+            self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining,
+            code,
+        ) {
+            (true, KeyCode::Right) => {
                 self.state.dice_pool.next_die();
                 true
             }
-            KeyCode::Left => {
+            (true, KeyCode::Left) => {
                 self.state.dice_pool.prev_die();
                 true
             }
-            KeyCode::Char(' ') => {
+            (true, KeyCode::Char(' ')) => {
                 self.state.dice_pool.toggle_selected();
                 true
             }
-            KeyCode::Char('r') | KeyCode::Char('R') => {
+            (_, KeyCode::Char('r') | KeyCode::Char('R')) => {
                 if self.state.roll() {
                     // Roll committed; start display animation.
                     // Collect held flags before borrowing rng.
@@ -429,13 +432,11 @@ impl App {
                 }
                 true
             }
-            KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
-                if self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining {
-                    self.state.begin_scoring();
-                }
+            (true, KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter) => {
+                self.state.begin_scoring();
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            (_, KeyCode::Char('q') | KeyCode::Char('Q')) => false,
             _ => true,
         }
     }
@@ -654,7 +655,7 @@ impl App {
 
     fn roll_hint(&self) -> &'static str {
         if self.state.dice_pool.rolls_remaining == self.state.dice_pool.max_rolls {
-            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [Q] Quit"
+            "[R] Roll  [Q] Quit"
         } else {
             "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
         }
