@@ -20,6 +20,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::{Style, Styled, Stylize},
     symbols,
     text::Line,
     widgets::{Block, Paragraph, Widget},
@@ -97,7 +98,7 @@ impl Widget for DiceView<'_> {
             };
 
             if die.selected {
-                block = block.border_set(symbols::border::THICK);
+                block = block.style(Style::new().cyan());
             }
             let box_height = DIE_H.min(area.bottom().saturating_sub(boxes_y));
             if box_height > 0 {
