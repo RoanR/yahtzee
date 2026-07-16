@@ -5,16 +5,24 @@
 //   Item Name      Description                         75g  <  (cursor, affordable)
 //   HP Potion      Restore 15 HP                       40g     (affordable, no cursor)
 //   Dragon Bones   D8 die: faces 1-8...                50g  x  (cannot afford, grayed)
+//
+// Each item has a rounded box drawn around it
 
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style, Stylize},
+    symbols,
     text::Line,
-    widgets::{Paragraph, Widget},
+    widgets::{Block, Paragraph, Widget},
 };
 
 use crate::shop::ShopItem;
+
+// Each box is 4 tall (border + title/value + description + border)
+// Each box is the width of the passed area -2
+const ITEM_H: u16 = 4;
+const GAP: u16 = 1;
 
 pub struct ShopView<'a> {
     items: &'a [ShopItem],
@@ -44,33 +52,32 @@ impl Widget for ShopView<'_> {
             lines.push(Line::from("  Nothing for sale.").fg(Color::DarkGray));
         } else {
             for (i, item) in self.items.iter().enumerate() {
+                let y = area.y + i as u16 * ITEM_H;
+                if y + ITEM_H > area.bottom() {
+                    break;
+                }
+
+                let mut block = Block::bordered().border_set(symbols::border::ROUNDED);
                 let is_cursor = i == self.cursor;
-                let price = item.price;
-                let can_afford = self.gold >= price;
+                let price = format!("{}g", item.price);
+                let can_afford = self.gold >= item.price;
 
-                let marker = if is_cursor {
-                    "<"
+                if is_cursor {
+                    block = block.style(Style::new().cyan());
                 } else if !can_afford {
-                    "x"
-                } else {
-                    " "
-                };
-
-                let style = if is_cursor {
-                    Style::new().fg(Color::Cyan).bold()
-                } else if !can_afford {
-                    Style::new().fg(Color::DarkGray)
-                } else {
-                    Style::new()
-                };
+                    block = block.style(Style::new().red());
+                }
 
                 let name = item.name();
                 let desc = item.description();
-                let text = format!("  {:<14} {:<40} {:>4}g  {}", name, desc, price, marker);
-                lines.push(Line::styled(text, style));
+                let text: Vec<Line> = vec![
+                    Line::from(format!("  {:<14} {:>}", name, price)),
+                    Line::from(format!("  {desc}  ")),
+                ];
+                Paragraph::new(text)
+                    .block(block)
+                    .render(Rect::new(area.x + 1, y, area.right() - 1, ITEM_H), buf);
             }
         }
-
-        Paragraph::new(lines).render(area, buf);
     }
 }
