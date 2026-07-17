@@ -32,6 +32,15 @@ impl Floor {
         }
     }
 
+    // Returns the current non-boss room as mut, or None if the boss is next.
+    pub fn current_room_mut(&mut self) -> Option<&mut Room> {
+        if self.current_room < self.rooms.len() {
+            Some(&mut self.rooms[self.current_room])
+        } else {
+            None
+        }
+    }
+
     // Advance to the next room. Returns false if already past the last room.
     pub fn advance(&mut self) -> bool {
         if self.current_room <= self.rooms.len() {
