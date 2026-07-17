@@ -28,20 +28,20 @@ use crate::{
     game::{GamePhase, GameState},
 };
 
-// Width of the HP bar in characters (excluding brackets).
+// Generate a bar based off a current and max value
 const BAR_WIDTH: usize = 15;
-fn bar(state: &GameState) -> String {
+fn bar(&max: &usize, &current: &usize) -> String {
     // Make the HP bar and fraction
-    let filled = (state.hp as usize * BAR_WIDTH)
-        .checked_div(state.max_hp as usize)
+    let filled = (current * BAR_WIDTH)
+        .checked_div(max as usize)
         .unwrap_or(0)
         .min(BAR_WIDTH);
     format!(
         "[{}{}] {} / {}",
         "=".repeat(filled),
         "-".repeat(BAR_WIDTH - filled),
-        state.hp,
-        state.max_hp
+        current,
+        max
     )
 }
 
@@ -72,8 +72,14 @@ impl Widget for DungeonView<'_> {
         let target_line = match self.state.phase {
             GamePhase::Scored { score, target, .. } => Some(format!("Score {score}/{target}")),
             _ => match floor.current_room() {
-                Some(Room::Challenge(t)) => Some(format!("Target: {} pts", t.required)),
-                Some(Room::Elite(t)) => Some(format!("Elite target: {} pts", t.required)),
+                Some(Room::Challenge(t)) => Some(format!(
+                    "Target: {}",
+                    bar(&(t.required as usize), &(t.current as usize))
+                )),
+                Some(Room::Elite(t)) => Some(format!(
+                    "Elite target: {}",
+                    bar(&(t.required as usize), &(t.current as usize))
+                )),
                 _ => None,
             },
         };
@@ -102,14 +108,17 @@ impl Widget for DungeonView<'_> {
 
         // Row 1: target left, hp bar right.
         let [target_area, hp_area] =
-            Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(2)]).areas(second_area);
 
         if let Some(line) = target_line {
             Paragraph::new(line).render(target_area, buf)
         }
-        Paragraph::new(bar(self.state))
-            .right_aligned()
-            .render(hp_area, buf);
+        Paragraph::new(bar(
+            &(self.state.max_hp as usize),
+            &(self.state.hp as usize),
+        ))
+        .right_aligned()
+        .render(hp_area, buf);
     }
 }
 
@@ -156,8 +165,11 @@ impl Widget for BossHeaderView<'_> {
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
 
         Paragraph::new(weakness).render(weakness_area, buf);
-        Paragraph::new(bar(self.state))
-            .right_aligned()
-            .render(hp_area, buf);
+        Paragraph::new(bar(
+            &(self.state.max_hp as usize),
+            &(self.state.hp as usize),
+        ))
+        .right_aligned()
+        .render(hp_area, buf);
     }
 }

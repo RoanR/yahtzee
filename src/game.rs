@@ -138,10 +138,13 @@ impl GameState {
             self.used_this_room.push(category);
         }
 
-        let target = match self.dungeon.current_floor().current_room() {
-            Some(room::Room::Challenge(x)) => x.required,
-            Some(room::Room::Elite(x)) => x.required,
-            None => self.dungeon.current_floor().boss.target.required,
+        let target = match self.dungeon.current_floor_mut().current_room_mut() {
+            Some(room::Room::Elite(x)) | Some(room::Room::Challenge(x)) => {
+                let ret = x.current;
+                x.current = x.current.saturating_sub(score as u32);
+                ret
+            }
+            None => self.dungeon.current_floor().boss.target.current,
             Some(room::Room::Rest) => return,
         };
 

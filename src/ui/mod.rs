@@ -532,6 +532,10 @@ impl App {
             self.state.earn_gold(reward_gold);
         } else {
             self.state.take_damage(10);
+            if !matches!(self.state.phase, GamePhase::GameOver) {
+                self.state.begin_room();
+                self.state.phase = GamePhase::Rolling;
+            }
         }
 
         if matches!(self.state.phase, GamePhase::GameOver) {
@@ -541,9 +545,6 @@ impl App {
         if success {
             let items = shop::generate_shop_items(&self.state, &mut self.rng);
             self.state.phase = GamePhase::Shop { items, cursor: 0 };
-        } else {
-            self.state.dungeon.current_floor_mut().advance();
-            self.transition_after_advance();
         }
         true
     }

@@ -13,6 +13,7 @@ use crate::scoring::ScoreCategory;
 pub struct ScoreTarget {
     pub required: u32,
     pub reward_gold: u32,
+    pub current: u32,
 }
 
 // ─── Debuff ───────────────────────────────────────────────────────────────────

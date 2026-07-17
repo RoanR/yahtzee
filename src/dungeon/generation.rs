@@ -29,22 +29,28 @@ fn base_target(floor_num: usize) -> u32 {
 }
 
 fn challenge_target(floor_num: usize) -> ScoreTarget {
+    let target = base_target(floor_num);
     ScoreTarget {
-        required: base_target(floor_num),
+        required: target,
+        current: target,
         reward_gold: 25,
     }
 }
 
 fn elite_target(floor_num: usize) -> ScoreTarget {
+    let target = base_target(floor_num) * 3 / 2;
     ScoreTarget {
-        required: base_target(floor_num) * 3 / 2,
+        required: target,
+        current: target,
         reward_gold: 50,
     }
 }
 
 fn boss_target(floor_num: usize) -> ScoreTarget {
+    let target = base_target(floor_num) * 2;
     ScoreTarget {
-        required: base_target(floor_num) * 2,
+        required: target,
+        current: target,
         reward_gold: 0,
     }
 }
