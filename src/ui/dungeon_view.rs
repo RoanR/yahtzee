@@ -28,20 +28,20 @@ use crate::{
     game::{GamePhase, GameState},
 };
 
-// Width of the HP bar in characters (excluding brackets).
+// Generate a bar based off a current and max value
 const BAR_WIDTH: usize = 15;
-fn bar(state: &GameState) -> String {
+fn bar(&max: &usize, &current: &usize) -> String {
     // Make the HP bar and fraction
-    let filled = (state.hp as usize * BAR_WIDTH)
-        .checked_div(state.max_hp as usize)
+    let filled = (current * BAR_WIDTH)
+        .checked_div(max as usize)
         .unwrap_or(0)
         .min(BAR_WIDTH);
     format!(
         "[{}{}] {} / {}",
         "=".repeat(filled),
         "-".repeat(BAR_WIDTH - filled),
-        state.hp,
-        state.max_hp
+        current,
+        max
     )
 }
 
@@ -107,9 +107,12 @@ impl Widget for DungeonView<'_> {
         if let Some(line) = target_line {
             Paragraph::new(line).render(target_area, buf)
         }
-        Paragraph::new(bar(self.state))
-            .right_aligned()
-            .render(hp_area, buf);
+        Paragraph::new(bar(
+            &(self.state.max_hp as usize),
+            &(self.state.hp as usize),
+        ))
+        .right_aligned()
+        .render(hp_area, buf);
     }
 }
 
@@ -156,8 +159,11 @@ impl Widget for BossHeaderView<'_> {
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
 
         Paragraph::new(weakness).render(weakness_area, buf);
-        Paragraph::new(bar(self.state))
-            .right_aligned()
-            .render(hp_area, buf);
+        Paragraph::new(bar(
+            &(self.state.max_hp as usize),
+            &(self.state.hp as usize),
+        ))
+        .right_aligned()
+        .render(hp_area, buf);
     }
 }
