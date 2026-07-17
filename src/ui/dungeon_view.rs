@@ -72,8 +72,14 @@ impl Widget for DungeonView<'_> {
         let target_line = match self.state.phase {
             GamePhase::Scored { score, target, .. } => Some(format!("Score {score}/{target}")),
             _ => match floor.current_room() {
-                Some(Room::Challenge(t)) => Some(format!("Target: {} pts", t.required)),
-                Some(Room::Elite(t)) => Some(format!("Elite target: {} pts", t.required)),
+                Some(Room::Challenge(t)) => Some(format!(
+                    "Target: {}",
+                    bar(&(t.required as usize), &(t.current as usize))
+                )),
+                Some(Room::Elite(t)) => Some(format!(
+                    "Elite target: {}",
+                    bar(&(t.required as usize), &(t.current as usize))
+                )),
                 _ => None,
             },
         };
@@ -102,7 +108,7 @@ impl Widget for DungeonView<'_> {
 
         // Row 1: target left, hp bar right.
         let [target_area, hp_area] =
-            Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(2)]).areas(second_area);
 
         if let Some(line) = target_line {
             Paragraph::new(line).render(target_area, buf)
