@@ -13,6 +13,7 @@ pub mod dice_view;
 pub mod dungeon_view;
 pub mod score_view;
 pub mod shop_view;
+pub mod upgrade_view;
 
 use std::time::Duration;
 
@@ -31,8 +32,9 @@ use ratatui::{
 };
 
 use crate::{
+    dice::DieUpgrade,
     dungeon::room,
-    game::{GamePhase, GameState},
+    game::{GamePhase, GameState, UpgradeKind},
     scoring::ScoreCategory,
     shop,
 };
@@ -60,6 +62,8 @@ pub struct App {
     // The two categories offered after a boss defeat; cleared after unlock.
     unlock_options: Option<[ScoreCategory; 2]>,
     roll_animation: Option<RollAnimation>,
+    // Shop items held aside while the player picks a die/face for an upgrade purchased in shop.
+    stashed_shop: Option<(Vec<shop::ShopItem>, usize)>,
 }
 
 impl App {
@@ -69,6 +73,7 @@ impl App {
             rng: rand::rng(),
             unlock_options: None,
             roll_animation: None,
+            stashed_shop: None,
         }
     }
 
@@ -115,6 +120,15 @@ impl App {
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
             GamePhase::Rest => self.render_rest(frame),
+            GamePhase::UpgradeSelectDie { die_cursor, kind, .. } => {
+                self.render_upgrade_select_die(frame, *die_cursor, *kind)
+            }
+            GamePhase::UpgradeSelectFace {
+                die_index,
+                face_cursor,
+                kind,
+                ..
+            } => self.render_upgrade_select_face(frame, *die_index, *face_cursor, *kind),
             GamePhase::CategoryUnlock => self.render_unlock(frame),
             GamePhase::GameOver => self.render_game_over(frame),
         }
@@ -337,10 +351,71 @@ impl App {
     fn render_rest(&self, frame: &mut ratatui::Frame) {
         frame.render_widget(
             Paragraph::new(format!(
-                "REST\nHP: {}/{}\n\n[H] Heal 15 HP\n[Q] Quit",
+                "REST  HP: {}/{}\n\n[H] Heal 15 HP\n[A] Augment a face (+1 value)\n[E] Enchant a face (+5 score)\n[Q] Quit",
                 self.state.hp, self.state.max_hp
             )),
             frame.area(),
+        );
+    }
+
+    fn render_upgrade_select_die(
+        &self,
+        frame: &mut ratatui::Frame,
+        die_cursor: usize,
+        kind: UpgradeKind,
+    ) {
+        let area = frame.area();
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        let [left_area, right_area] =
+            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
+                .areas(main_area);
+
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        frame.render_widget(
+            dice_view::DiceView::with_upgrade_cursor(&self.state.dice_pool, die_cursor),
+            left_area,
+        );
+        frame.render_widget(upgrade_view::UpgradeDiePrompt::new(kind), right_area);
+        frame.render_widget(
+            Paragraph::new("[Left/Right] Select  [Enter] Confirm  [Esc] Back  [Q] Quit"),
+            hints_area,
+        );
+    }
+
+    fn render_upgrade_select_face(
+        &self,
+        frame: &mut ratatui::Frame,
+        die_index: usize,
+        face_cursor: usize,
+        kind: UpgradeKind,
+    ) {
+        let area = frame.area();
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        frame.render_widget(
+            upgrade_view::FaceSelectView::new(
+                &self.state.dice_pool.dice[die_index],
+                die_index,
+                face_cursor,
+                kind,
+            ),
+            main_area,
+        );
+        frame.render_widget(
+            Paragraph::new("[Left/Right] Select  [Enter] Upgrade  [Esc] Back  [Q] Quit"),
+            hints_area,
         );
     }
 
@@ -387,6 +462,19 @@ impl App {
                 self.handle_shop(code, cursor)
             }
             GamePhase::Rest => self.handle_rest(code),
+            GamePhase::UpgradeSelectDie { die_cursor, kind, from_shop } => {
+                let (c, k, fs) = (*die_cursor, *kind, *from_shop);
+                self.handle_upgrade_select_die(code, c, k, fs)
+            }
+            GamePhase::UpgradeSelectFace {
+                die_index,
+                face_cursor,
+                kind,
+                from_shop,
+            } => {
+                let (di, fc, k, fs) = (*die_index, *face_cursor, *kind, *from_shop);
+                self.handle_upgrade_select_face(code, di, fc, k, fs)
+            }
             GamePhase::CategoryUnlock => self.handle_unlock(code),
             GamePhase::GameOver => self.handle_game_over(code),
         }
@@ -579,6 +667,17 @@ impl App {
                 true
             }
             KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
+                // Only proceed if the player can afford the selected item.
+                let can_afford = match &self.state.phase {
+                    GamePhase::Shop { items, cursor } => {
+                        items.get(*cursor).map_or(false, |it| self.state.gold >= it.price)
+                    }
+                    _ => false,
+                };
+                if !can_afford {
+                    return true;
+                }
+
                 let item = match &mut self.state.phase {
                     GamePhase::Shop { items, cursor } if *cursor < items.len() => {
                         Some(items.remove(*cursor))
@@ -586,11 +685,29 @@ impl App {
                     _ => None,
                 };
                 if let Some(item) = item {
-                    self.state.buy_shop_item(item);
-                    // Clamp cursor if it's now past the end.
-                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase {
-                        if *cursor >= items.len() && !items.is_empty() {
-                            *cursor = items.len() - 1;
+                    match item.kind {
+                        shop::ShopItemKind::DieUpgrade(kind) => {
+                            self.state.spend_gold(item.price);
+                            // Extract remaining shop state and stash it while the player
+                            // picks which die and face to upgrade.
+                            let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
+                            if let GamePhase::Shop { items, cursor } = old {
+                                self.stashed_shop = Some((items, cursor));
+                            }
+                            self.state.phase = GamePhase::UpgradeSelectDie {
+                                die_cursor: 0,
+                                kind,
+                                from_shop: true,
+                            };
+                        }
+                        _ => {
+                            self.state.buy_shop_item(item);
+                            // Clamp cursor if it's now past the end.
+                            if let GamePhase::Shop { items, cursor } = &mut self.state.phase {
+                                if *cursor >= items.len() && !items.is_empty() {
+                                    *cursor = items.len() - 1;
+                                }
+                            }
                         }
                     }
                 }
@@ -612,6 +729,127 @@ impl App {
                 self.state.heal(15);
                 self.state.dungeon.current_floor_mut().advance();
                 self.transition_after_advance();
+                true
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                self.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: 0,
+                    kind: UpgradeKind::Augment,
+                    from_shop: false,
+                };
+                true
+            }
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                self.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: 0,
+                    kind: UpgradeKind::Enchant,
+                    from_shop: false,
+                };
+                true
+            }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
+        }
+    }
+
+    fn handle_upgrade_select_die(
+        &mut self,
+        code: KeyCode,
+        die_cursor: usize,
+        kind: UpgradeKind,
+        from_shop: bool,
+    ) -> bool {
+        let pool_len = self.state.dice_pool.dice.len();
+        match code {
+            KeyCode::Left => {
+                self.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: (die_cursor + pool_len - 1) % pool_len,
+                    kind,
+                    from_shop,
+                };
+                true
+            }
+            KeyCode::Right => {
+                self.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: (die_cursor + 1) % pool_len,
+                    kind,
+                    from_shop,
+                };
+                true
+            }
+            KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
+                self.state.phase = GamePhase::UpgradeSelectFace {
+                    die_index: die_cursor,
+                    face_cursor: 0,
+                    kind,
+                    from_shop,
+                };
+                true
+            }
+            KeyCode::Esc if !from_shop => {
+                self.state.phase = GamePhase::Rest;
+                true
+            }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
+        }
+    }
+
+    fn handle_upgrade_select_face(
+        &mut self,
+        code: KeyCode,
+        die_index: usize,
+        face_cursor: usize,
+        kind: UpgradeKind,
+        from_shop: bool,
+    ) -> bool {
+        let faces_len = self.state.dice_pool.dice[die_index].faces().len();
+        match code {
+            KeyCode::Left => {
+                self.state.phase = GamePhase::UpgradeSelectFace {
+                    die_index,
+                    face_cursor: (face_cursor + faces_len - 1) % faces_len,
+                    kind,
+                    from_shop,
+                };
+                true
+            }
+            KeyCode::Right => {
+                self.state.phase = GamePhase::UpgradeSelectFace {
+                    die_index,
+                    face_cursor: (face_cursor + 1) % faces_len,
+                    kind,
+                    from_shop,
+                };
+                true
+            }
+            KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
+                let upgrade = match kind {
+                    UpgradeKind::Augment => DieUpgrade::Augment {
+                        face_index: face_cursor,
+                    },
+                    UpgradeKind::Enchant => DieUpgrade::Enchant {
+                        face_index: face_cursor,
+                        bonus_score: 5,
+                    },
+                };
+                self.state.upgrade_die(die_index, upgrade);
+                if from_shop {
+                    // Return to the shop with any remaining items.
+                    let (items, cursor) = self.stashed_shop.take().unwrap_or_default();
+                    self.state.phase = GamePhase::Shop { items, cursor };
+                } else {
+                    self.state.dungeon.current_floor_mut().advance();
+                    self.transition_after_advance();
+                }
+                true
+            }
+            KeyCode::Esc => {
+                self.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: die_index,
+                    kind,
+                    from_shop,
+                };
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
