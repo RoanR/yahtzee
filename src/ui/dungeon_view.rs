@@ -10,8 +10,8 @@
 //   bar char: "=" for filled, "-" for empty
 //
 // Boss header uses the same widget but with different row 0/1 content:
-//   Row 0: "BOSS: Rat King" (left) | "Floor 1 | Gold: 50g" (right)
-//   Row 1: "Weakness: Chance  Target: 20 pts" (left) | HP bar (right)
+//   Row 0: "BOSS: Rat King" (left) | "Floor 1 | Target: 20 pts | Gold: 50g" (right)
+//   Row 1: "Weakness: Chance" (left) | HP bar (right)
 //
 // Two callers pass different data to achieve this:
 //   - DungeonView::new(&state)         for challenge/elite rooms
@@ -125,10 +125,11 @@ impl Widget for DungeonView<'_> {
 // ─── BossHeaderView ───────────────────────────────────────────────────────────
 
 // Separate header widget for the boss screen. Same 2-row layout as DungeonView
-// but row 0 shows the boss name and row 1 shows weakness + target.
+// but row 0 shows the boss name and row 1 mirrors the target-bar + HP-bar
+// layout used by DungeonView for challenge/elite rooms.
 //
-// Row 0: "BOSS: <name>" (left) | "Floor X | Gold: Xg" (right)
-// Row 1: "Weakness: <cat>  Target: <n> pts" (left) | HP bar (right)
+// Row 0: "BOSS: <name>" (left) | "Floor X | Weak: <cat> | Gold: Xg" (right)
+// Row 1: "Target: <bar>  N / N" (left, Fill(2)) | HP bar (right, Fill(2))
 //
 pub struct BossHeaderView<'a> {
     state: &'a GameState,
@@ -144,10 +145,16 @@ impl Widget for BossHeaderView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let floor = self.state.dungeon.current_floor();
         let boss_name = format!("BOSS: {}", floor.boss.name);
-        let status = format!("Floor {} | Gold: {}g", floor.floor_num, self.state.gold);
-        let weakness = format!(
-            "Weakness: {}  Target: {} pts",
-            floor.boss.weakness, floor.boss.target.required,
+        let status = format!(
+            "Floor {} | Weak: {} | Gold: {}g",
+            floor.floor_num, floor.boss.weakness, self.state.gold,
+        );
+        let target_line = format!(
+            "Target: {}",
+            bar(
+                &(floor.boss.target.required as usize),
+                &(floor.boss.target.current as usize),
+            )
         );
 
         let [header_area, second_area] =
@@ -161,10 +168,10 @@ impl Widget for BossHeaderView<'_> {
             .right_aligned()
             .render(status_area, buf);
 
-        let [weakness_area, hp_area] =
-            Layout::horizontal([Constraint::Fill(1), Constraint::Fill(2)]).areas(second_area);
+        let [target_area, hp_area] =
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(2)]).areas(second_area);
 
-        Paragraph::new(weakness).render(weakness_area, buf);
+        Paragraph::new(target_line).render(target_area, buf);
         Paragraph::new(bar(
             &(self.state.max_hp as usize),
             &(self.state.hp as usize),
