@@ -10,7 +10,7 @@
 use rand::{Rng, seq::SliceRandom};
 
 use crate::{
-    game::GameState,
+    game::{GameState, UpgradeKind},
     relics::{self, Relic},
 };
 
@@ -19,6 +19,7 @@ const RELIC_BASE_PRICE: u32 = 75;
 const SPECIAL_DIE_BASE_PRICE: u32 = 50;
 const HP_POTION_BASE_PRICE: u32 = 40;
 const HP_POTION_HEAL: u32 = 15;
+const DIE_UPGRADE_BASE_PRICE: u32 = 60;
 
 // ─── SpecialDieKind ───────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ pub enum ShopItemKind {
     Relic(Box<dyn Relic>),
     SpecialDie(SpecialDieKind),
     HpPotion(u32), // heal amount
+    DieUpgrade(UpgradeKind),
 }
 
 impl ShopItem {
@@ -73,6 +75,8 @@ impl ShopItem {
             ShopItemKind::Relic(r) => r.name(),
             ShopItemKind::SpecialDie(k) => k.name(),
             ShopItemKind::HpPotion(_) => "HP Potion",
+            ShopItemKind::DieUpgrade(UpgradeKind::Augment) => "Augment",
+            ShopItemKind::DieUpgrade(UpgradeKind::Enchant) => "Enchant",
         }
     }
 
@@ -81,6 +85,12 @@ impl ShopItem {
             ShopItemKind::Relic(r) => r.description().to_string(),
             ShopItemKind::SpecialDie(k) => k.description().to_string(),
             ShopItemKind::HpPotion(amt) => format!("Restore {} HP", amt),
+            ShopItemKind::DieUpgrade(UpgradeKind::Augment) => {
+                "Pick a die face: raise its value by 1".to_string()
+            }
+            ShopItemKind::DieUpgrade(UpgradeKind::Enchant) => {
+                "Pick a die face: add +5 bonus score on roll".to_string()
+            }
         }
     }
 }
@@ -123,6 +133,14 @@ pub fn generate_shop_items(state: &GameState, rng: &mut impl Rng) -> Vec<ShopIte
     if state.hp < state.max_hp {
         items.push(ShopItem { kind: ShopItemKind::HpPotion(HP_POTION_HEAL), price: price(HP_POTION_BASE_PRICE) });
     }
+
+    // One die upgrade: randomly Augment or Enchant.
+    let upgrade_kind = if rng.random_range(0..2u8) == 0 {
+        UpgradeKind::Augment
+    } else {
+        UpgradeKind::Enchant
+    };
+    items.push(ShopItem { kind: ShopItemKind::DieUpgrade(upgrade_kind), price: price(DIE_UPGRADE_BASE_PRICE) });
 
     items
 }
