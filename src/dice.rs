@@ -215,6 +215,10 @@ impl Die {
         self.current_value.value == WILD
     }
 
+    pub fn faces(&self) -> &[DieFace] {
+        &self.faces
+    }
+
     // Display string for the TUI ("W" for wild, else the number).
     pub fn display_value(&self) -> String {
         if self.is_wild() {

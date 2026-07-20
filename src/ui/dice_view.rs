@@ -37,6 +37,8 @@ pub struct DiceView<'a> {
     pool: &'a DicePool,
     // Per-die animated display value. None = show actual die value (held or no animation).
     animated_values: Option<&'a [Option<u8>]>,
+    // Highlights one die in yellow for the upgrade-die-selection screen.
+    upgrade_cursor: Option<usize>,
 }
 
 impl<'a> DiceView<'a> {
@@ -44,6 +46,7 @@ impl<'a> DiceView<'a> {
         Self {
             pool,
             animated_values: None,
+            upgrade_cursor: None,
         }
     }
 
@@ -51,6 +54,15 @@ impl<'a> DiceView<'a> {
         Self {
             pool,
             animated_values: Some(values),
+            upgrade_cursor: None,
+        }
+    }
+
+    pub fn with_upgrade_cursor(pool: &'a DicePool, cursor: usize) -> Self {
+        Self {
+            pool,
+            animated_values: None,
+            upgrade_cursor: Some(cursor),
         }
     }
 }
@@ -99,6 +111,8 @@ impl Widget for DiceView<'_> {
 
             if die.selected {
                 block = block.style(Style::new().cyan());
+            } else if self.upgrade_cursor == Some(i) {
+                block = block.style(Style::new().yellow());
             }
             let box_height = DIE_H.min(area.bottom().saturating_sub(boxes_y));
             if box_height > 0 {

@@ -19,6 +19,14 @@ use crate::{
     shop::{ShopItem, ShopItemKind},
 };
 
+// ─── UpgradeKind ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy)]
+pub enum UpgradeKind {
+    Augment,
+    Enchant,
+}
+
 // ─── GamePhase ────────────────────────────────────────────────────────────────
 
 // Tracks which screen/interaction mode the game is in.
@@ -45,6 +53,10 @@ pub enum GamePhase {
     },
     // Player is at a campfire: pick heal or upgrade.
     Rest,
+    // Player is picking which die to upgrade (campfire or shop).
+    UpgradeSelectDie { die_cursor: usize, kind: UpgradeKind, from_shop: bool },
+    // Player is picking which face of the chosen die to upgrade (campfire or shop).
+    UpgradeSelectFace { die_index: usize, face_cursor: usize, kind: UpgradeKind, from_shop: bool },
     // Player just defeated a boss; pick a new category to unlock.
     CategoryUnlock,
     // Run is over.
@@ -229,6 +241,7 @@ impl GameState {
                 self.dice_pool.replace_first_standard_die(kind.create_die());
             }
             ShopItemKind::HpPotion(amount) => self.heal(amount),
+            ShopItemKind::DieUpgrade(_) => unreachable!("handled by UI before reaching buy_shop_item"),
         }
         true
     }
