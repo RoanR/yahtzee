@@ -32,7 +32,7 @@ use ratatui::{
 };
 
 use crate::{
-    dice::DieUpgrade,
+    dice::{Die, DieUpgrade},
     dungeon::room,
     game::{GamePhase, GameState, UpgradeKind},
     scoring::ScoreCategory,
@@ -120,9 +120,9 @@ impl App {
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
             GamePhase::Rest => self.render_rest(frame),
-            GamePhase::UpgradeSelectDie {
-                die_cursor, kind, ..
-            } => self.render_upgrade_select_die(frame, *die_cursor, *kind),
+            GamePhase::UpgradeSelectDie { die_cursor, kind, pending_die, .. } => {
+                self.render_upgrade_select_die(frame, *die_cursor, *kind, pending_die.as_ref())
+            }
             GamePhase::UpgradeSelectFace {
                 die_index,
                 face_cursor,
@@ -363,6 +363,7 @@ impl App {
         frame: &mut ratatui::Frame,
         die_cursor: usize,
         kind: UpgradeKind,
+        pending_die: Option<&Die>,
     ) {
         let area = frame.area();
         let [header_area, main_area, hints_area] = Layout::vertical([
@@ -381,11 +382,22 @@ impl App {
             dice_view::DiceView::with_upgrade_cursor(&self.state.dice_pool, die_cursor),
             left_area,
         );
-        frame.render_widget(upgrade_view::UpgradeDiePrompt::new(kind), right_area);
-        frame.render_widget(
-            Paragraph::new("[Left/Right] Select  [Enter] Confirm  [Esc] Back  [Q] Quit"),
-            hints_area,
-        );
+        if let Some(die) = pending_die {
+            frame.render_widget(
+                Paragraph::new(format!("Replacing with\n{}", die.label())),
+                right_area,
+            );
+            frame.render_widget(
+                Paragraph::new("[Left/Right] Select  [Enter] Replace  [Q] Quit"),
+                hints_area,
+            );
+        } else {
+            frame.render_widget(upgrade_view::UpgradeDiePrompt::new(kind), right_area);
+            frame.render_widget(
+                Paragraph::new("[Left/Right] Select  [Enter] Confirm  [Esc] Back  [Q] Quit"),
+                hints_area,
+            );
+        }
     }
 
     fn render_upgrade_select_face(
@@ -462,13 +474,10 @@ impl App {
                 self.handle_shop(code, cursor)
             }
             GamePhase::Rest => self.handle_rest(code),
-            GamePhase::UpgradeSelectDie {
-                die_cursor,
-                kind,
-                from_shop,
-            } => {
+            GamePhase::UpgradeSelectDie { die_cursor, kind, from_shop, pending_die } => {
                 let (c, k, fs) = (*die_cursor, *kind, *from_shop);
-                self.handle_upgrade_select_die(code, c, k, fs)
+                let pd = pending_die.clone();
+                self.handle_upgrade_select_die(code, c, k, fs, pd)
             }
             GamePhase::UpgradeSelectFace {
                 die_index,
@@ -704,6 +713,21 @@ impl App {
                                 die_cursor: 0,
                                 kind,
                                 from_shop: true,
+                                pending_die: None,
+                            };
+                        }
+                        shop::ShopItemKind::SpecialDie(kind) => {
+                            self.state.spend_gold(item.price);
+                            let pending_die = Some(kind.create_die());
+                            let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
+                            if let GamePhase::Shop { items, cursor } = old {
+                                self.stashed_shop = Some((items, cursor));
+                            }
+                            self.state.phase = GamePhase::UpgradeSelectDie {
+                                die_cursor: 0,
+                                kind: UpgradeKind::Augment,
+                                from_shop: true,
+                                pending_die,
                             };
                         }
                         _ => {
@@ -742,6 +766,7 @@ impl App {
                     die_cursor: 0,
                     kind: UpgradeKind::Augment,
                     from_shop: false,
+                    pending_die: None,
                 };
                 true
             }
@@ -750,6 +775,7 @@ impl App {
                     die_cursor: 0,
                     kind: UpgradeKind::Enchant,
                     from_shop: false,
+                    pending_die: None,
                 };
                 true
             }
@@ -764,6 +790,7 @@ impl App {
         die_cursor: usize,
         kind: UpgradeKind,
         from_shop: bool,
+        pending_die: Option<Die>,
     ) -> bool {
         let pool_len = self.state.dice_pool.dice.len();
         match code {
@@ -772,6 +799,7 @@ impl App {
                     die_cursor: (die_cursor + pool_len - 1) % pool_len,
                     kind,
                     from_shop,
+                    pending_die,
                 };
                 true
             }
@@ -780,19 +808,26 @@ impl App {
                     die_cursor: (die_cursor + 1) % pool_len,
                     kind,
                     from_shop,
+                    pending_die,
                 };
                 true
             }
             KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
-                self.state.phase = GamePhase::UpgradeSelectFace {
-                    die_index: die_cursor,
-                    face_cursor: 0,
-                    kind,
-                    from_shop,
-                };
+                if let Some(die) = pending_die {
+                    self.state.replace_die_at(die_cursor, die);
+                    let (items, cursor) = self.stashed_shop.take().unwrap_or_default();
+                    self.state.phase = GamePhase::Shop { items, cursor };
+                } else {
+                    self.state.phase = GamePhase::UpgradeSelectFace {
+                        die_index: die_cursor,
+                        face_cursor: 0,
+                        kind,
+                        from_shop,
+                    };
+                }
                 true
             }
-            KeyCode::Esc if !from_shop => {
+            KeyCode::Esc if !from_shop && pending_die.is_none() => {
                 self.state.phase = GamePhase::Rest;
                 true
             }
@@ -855,6 +890,7 @@ impl App {
                     die_cursor: die_index,
                     kind,
                     from_shop,
+                    pending_die: None,
                 };
                 true
             }

@@ -9,7 +9,7 @@
 use rand::Rng;
 
 use crate::{
-    dice::{DicePool, DieUpgrade},
+    dice::{DicePool, Die, DieUpgrade},
     dungeon::{
         Dungeon,
         room::{self},
@@ -53,12 +53,9 @@ pub enum GamePhase {
     },
     // Player is at a campfire: pick heal or upgrade.
     Rest,
-    // Player is picking which die to upgrade (campfire or shop).
-    UpgradeSelectDie {
-        die_cursor: usize,
-        kind: UpgradeKind,
-        from_shop: bool,
-    },
+    // Player is picking which die to upgrade (campfire or shop) or replace (shop special die).
+    // When pending_die is Some, Enter replaces the selected die instead of going to face select.
+    UpgradeSelectDie { die_cursor: usize, kind: UpgradeKind, from_shop: bool, pending_die: Option<Die> },
     // Player is picking which face of the chosen die to upgrade (campfire or shop).
     UpgradeSelectFace {
         die_index: usize,
@@ -264,6 +261,11 @@ impl GameState {
     }
 
     // ── Die management ────────────────────────────────────────────────────────
+
+    // Replace the die at index with a new die (shop purchase of special die).
+    pub fn replace_die_at(&mut self, index: usize, die: Die) {
+        self.dice_pool.replace_die(index, die);
+    }
 
     // Apply an upgrade to a die at index in the pool (campfire interaction).
     pub fn upgrade_die(&mut self, die_index: usize, upgrade: DieUpgrade) -> bool {
