@@ -547,6 +547,8 @@ impl App {
             return true;
         }
 
+        let cursor = cursor.min(available.len() - 1);
+
         match code {
             KeyCode::Up => {
                 let new_cursor = if cursor == 0 {
