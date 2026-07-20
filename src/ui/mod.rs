@@ -547,6 +547,8 @@ impl App {
             return true;
         }
 
+        let cursor = cursor.min(available.len() - 1);
+
         match code {
             KeyCode::Up => {
                 let new_cursor = if cursor == 0 {
@@ -861,7 +863,7 @@ impl App {
         if self.unlock_options.is_none() {
             // All categories already unlocked: any key descends.
             self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::Rolling;
+            self.state.phase = self.phase_for_current_room();
             return true;
         }
 
@@ -875,10 +877,17 @@ impl App {
             self.state.unlock_category(cat);
             self.unlock_options = None;
             self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::Rolling;
+            self.state.phase = self.phase_for_current_room();
         }
 
         true
+    }
+
+    fn phase_for_current_room(&self) -> GamePhase {
+        match self.state.dungeon.current_floor().current_room() {
+            Some(room::Room::Rest) => GamePhase::Rest,
+            _ => GamePhase::Rolling,
+        }
     }
 
     fn handle_game_over(&mut self, code: KeyCode) -> bool {
