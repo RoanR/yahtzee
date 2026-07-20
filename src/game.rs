@@ -85,16 +85,21 @@ pub struct GameState {
 impl GameState {
     // Start a new run with default starting stats.
     pub fn new(rng: &mut impl Rng) -> Self {
+        let dungeon = Dungeon::new(rng);
+        let starting_phase = match dungeon.current_floor().current_room() {
+            Some(room::Room::Rest) => GamePhase::Rest,
+            _ => GamePhase::Rolling,
+        };
         Self {
             dice_pool: DicePool::new(),
             hp: 30,
             max_hp: 30,
             gold: 0,
-            dungeon: Dungeon::new(rng),
+            dungeon,
             unlocked: vec![ScoreCategory::HighDie, ScoreCategory::Chance],
             used_this_room: vec![],
             relics: vec![],
-            phase: GamePhase::Rolling,
+            phase: starting_phase,
             base_rolls: 3,
         }
     }
@@ -146,10 +151,6 @@ impl GameState {
         let score = scoring::calculate_for(&category, &values).unwrap_or(0)
             + self.dice_pool.enchant_bonus_total();
 
-        if category != ScoreCategory::HighDie {
-            self.used_this_room.push(category);
-        }
-
         let target = match self.dungeon.current_floor_mut().current_room_mut() {
             Some(room::Room::Elite(x)) | Some(room::Room::Challenge(x)) => {
                 let ret = x.current;
@@ -159,6 +160,10 @@ impl GameState {
             None => self.dungeon.current_floor().boss.target.current,
             Some(room::Room::Rest) => return,
         };
+
+        if category != ScoreCategory::HighDie {
+            self.used_this_room.push(category);
+        }
 
         self.phase = GamePhase::Scored {
             score,
