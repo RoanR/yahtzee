@@ -20,11 +20,14 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
+    style::Style,
+    text::Line,
+    text::Span,
     widgets::{Paragraph, Widget},
 };
 
 use crate::{
-    dungeon::room::Room,
+    dungeon::{Floor, room::Room},
     game::{GamePhase, GameState},
 };
 
@@ -43,6 +46,35 @@ fn bar(&max: &usize, &current: &usize) -> String {
         current,
         max
     )
+}
+
+// Generate the room navigation display bar
+fn room_nav(floor: &Floor) -> Vec<Span<'_>> {
+    let room_num = floor.current_room;
+    let room_tot = floor.rooms.len() - 1;
+    if room_num == room_tot {
+        vec![Span::styled(
+            "Boss",
+            Style::new().fg(ratatui::style::Color::Cyan),
+        )]
+    } else {
+        let mut room_nav = vec![Span::styled(" [", Style::default())];
+        for (i, r) in floor.rooms.iter().enumerate() {
+            let style = if i == room_num {
+                Style::new().fg(ratatui::style::Color::Cyan)
+            } else if i < room_num {
+                Style::new().fg(ratatui::style::Color::DarkGray)
+            } else {
+                Style::default()
+            };
+            room_nav.push(Span::styled(r.short_form(), style));
+            if i != room_tot {
+                room_nav.push(Span::styled("-", Style::default()));
+            }
+        }
+        room_nav.push(Span::styled("] ", Style::default()));
+        room_nav
+    }
 }
 
 pub struct DungeonView<'a> {
