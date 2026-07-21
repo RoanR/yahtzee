@@ -1,13 +1,7 @@
 // Dungeon header bar widget.
 //
-// Row 0: "DUNGEON DICE" (left) | "Floor 2 | Room 1/3 | Gold: 50g" (right)
-// Row 1: "Target: 80 pts" or "" (left) | HP bar + fraction (right)
-//
-// HP is moved off the status line and onto row 1 as a visual bar:
-//   [========-----]  20 / 30
-//   |<--- filled -->|<empty>|
-//   filled = hp * BAR_WIDTH / max_hp  (integer, clamped to [0, BAR_WIDTH])
-//   bar char: "=" for filled, "-" for empty
+// Row 0: "DUNGEON DICE" (left) | "Floor 2 | Room Nav | Gold: 50g" (right)
+// Row 1: Target bar + fraction 80 or "" (left) | HP bar + fraction (right)
 //
 // Boss header uses the same widget but with different row 0/1 content:
 //   Row 0: "BOSS: Rat King" (left) | "Floor 1 | Target: 20 pts | Gold: 50g" (right)
@@ -90,16 +84,24 @@ impl<'a> DungeonView<'a> {
 impl Widget for DungeonView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let floor = self.state.dungeon.current_floor();
-        let room_label = if floor.boss_next() {
-            "Boss".to_string()
-        } else {
-            format!("{}/{}", floor.current_room + 1, floor.rooms.len())
-        };
 
-        let status = format!(
-            "Floor {} | Room {} | Gold: {}g",
-            floor.floor_num, room_label, self.state.gold,
-        );
+        // This is an overly complex bit of code to keep the styling on
+        // the room display.
+        let status_spans: Vec<Span> = vec![
+            vec![Span::styled(
+                format!("Floor {} |", floor.floor_num),
+                Style::default(),
+            )],
+            room_nav(self.state.dungeon.current_floor()),
+            vec![Span::styled(
+                format!("| Gold {}g", self.state.gold),
+                Style::default(),
+            )],
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let status_line = Line::from(status_spans);
 
         let target_line = match self.state.phase {
             GamePhase::Scored { score, target, .. } => Some(format!("Score {score}/{target}")),
@@ -134,7 +136,7 @@ impl Widget for DungeonView<'_> {
             }
             _ => Paragraph::new("DUNGEON DICE").render(title_area, buf),
         };
-        Paragraph::new(status)
+        Paragraph::new(status_line)
             .right_aligned()
             .render(status_area, buf);
 
