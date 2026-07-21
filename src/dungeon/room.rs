@@ -51,3 +51,13 @@ pub enum Room {
     // Choose: restore 15 HP or upgrade one die in your pool.
     Rest,
 }
+
+impl Room {
+    pub fn short_form(&self) -> String {
+        match self {
+            Room::Challenge(_) => "C".to_string(),
+            Room::Elite(_) => "E".to_string(),
+            Room::Rest => "R".to_string(),
+        }
+    }
+}
