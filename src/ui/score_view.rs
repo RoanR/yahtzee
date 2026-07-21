@@ -68,11 +68,14 @@ impl Widget for ScoreView<'_> {
 
         if self.pool.rolls_remaining == self.pool.max_rolls {
             let mut lines = vec![Line::from("")];
-            lines.extend(
-                self.unlocked
-                    .iter()
-                    .map(|category| Line::from(format!(" {category:<15} --"))),
-            );
+            lines.extend(self.unlocked.iter().map(|category| {
+                let style = if self.used_this_room.contains(category) {
+                    Style::new().fg(Color::DarkGray)
+                } else {
+                    Style::new()
+                };
+                Line::styled(format!(" {category:<15} --"), style)
+            }));
             Paragraph::new(lines).block(block).render(area, buf);
             return;
         }

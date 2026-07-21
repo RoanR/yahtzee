@@ -54,9 +54,18 @@ pub enum GamePhase {
     // Player is at a campfire: pick heal or upgrade.
     Rest,
     // Player is picking which die to upgrade (campfire or shop).
-    UpgradeSelectDie { die_cursor: usize, kind: UpgradeKind, from_shop: bool },
+    UpgradeSelectDie {
+        die_cursor: usize,
+        kind: UpgradeKind,
+        from_shop: bool,
+    },
     // Player is picking which face of the chosen die to upgrade (campfire or shop).
-    UpgradeSelectFace { die_index: usize, face_cursor: usize, kind: UpgradeKind, from_shop: bool },
+    UpgradeSelectFace {
+        die_index: usize,
+        face_cursor: usize,
+        kind: UpgradeKind,
+        from_shop: bool,
+    },
     // Player just defeated a boss; pick a new category to unlock.
     CategoryUnlock,
     // Run is over.
@@ -108,14 +117,15 @@ impl GameState {
 
     // Called at the start of every new room: reset dice, clear used categories,
     // apply relic on_room_start effects, apply max_rolls from relic bonuses.
-    pub fn begin_room(&mut self) {
-        self.used_this_room.clear();
+    pub fn begin_room(&mut self, new: bool) {
+        if new {
+            self.used_this_room.clear();
 
-        // Apply on_floor_start hooks from relics
-        if self.dungeon.current_floor().current_room == 0 {
-            self.relics.iter_mut().for_each(|r| r.on_floor_start());
+            // Apply on_floor_start hooks from relics
+            if self.dungeon.current_floor().current_room == 0 {
+                self.relics.iter_mut().for_each(|r| r.on_floor_start());
+            }
         }
-
         // Recompute max_rolls from base each room so relic bonuses don't stack.
         let extra: u8 = self.relics.iter().map(|r| r.extra_rolls()).sum();
         self.dice_pool.max_rolls = self.base_rolls + extra;
@@ -220,7 +230,7 @@ impl GameState {
     // Descend to the next floor after unlocking a category.
     pub fn descend(&mut self, rng: &mut impl Rng) {
         self.dungeon.descend(rng);
-        self.begin_room();
+        self.begin_room(true);
     }
 
     // ── Relic management ──────────────────────────────────────────────────────
@@ -246,7 +256,9 @@ impl GameState {
                 self.dice_pool.replace_first_standard_die(kind.create_die());
             }
             ShopItemKind::HpPotion(amount) => self.heal(amount),
-            ShopItemKind::DieUpgrade(_) => unreachable!("handled by UI before reaching buy_shop_item"),
+            ShopItemKind::DieUpgrade(_) => {
+                unreachable!("handled by UI before reaching buy_shop_item")
+            }
         }
         true
     }
