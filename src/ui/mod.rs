@@ -120,9 +120,9 @@ impl App {
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
             GamePhase::Rest => self.render_rest(frame),
-            GamePhase::UpgradeSelectDie { die_cursor, kind, .. } => {
-                self.render_upgrade_select_die(frame, *die_cursor, *kind)
-            }
+            GamePhase::UpgradeSelectDie {
+                die_cursor, kind, ..
+            } => self.render_upgrade_select_die(frame, *die_cursor, *kind),
             GamePhase::UpgradeSelectFace {
                 die_index,
                 face_cursor,
@@ -462,7 +462,11 @@ impl App {
                 self.handle_shop(code, cursor)
             }
             GamePhase::Rest => self.handle_rest(code),
-            GamePhase::UpgradeSelectDie { die_cursor, kind, from_shop } => {
+            GamePhase::UpgradeSelectDie {
+                die_cursor,
+                kind,
+                from_shop,
+            } => {
                 let (c, k, fs) = (*die_cursor, *kind, *from_shop);
                 self.handle_upgrade_select_die(code, c, k, fs)
             }
@@ -671,9 +675,9 @@ impl App {
             KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
                 // Only proceed if the player can afford the selected item.
                 let can_afford = match &self.state.phase {
-                    GamePhase::Shop { items, cursor } => {
-                        items.get(*cursor).map_or(false, |it| self.state.gold >= it.price)
-                    }
+                    GamePhase::Shop { items, cursor } => items
+                        .get(*cursor)
+                        .map_or(false, |it| self.state.gold >= it.price),
                     _ => false,
                 };
                 if !can_afford {
