@@ -600,7 +600,7 @@ impl App {
             } else {
                 self.state.take_damage(20);
                 if !matches!(self.state.phase, GamePhase::GameOver) {
-                    self.state.begin_room();
+                    self.state.begin_room(false);
                     self.state.phase = GamePhase::Boss;
                 }
             }
@@ -623,7 +623,7 @@ impl App {
         } else {
             self.state.take_damage(10);
             if !matches!(self.state.phase, GamePhase::GameOver) {
-                self.state.begin_room();
+                self.state.begin_room(false);
                 self.state.phase = GamePhase::Rolling;
             }
         }
@@ -953,7 +953,7 @@ impl App {
             }
             Some(_) | None => {
                 let is_boss_next = self.state.dungeon.current_floor().boss_next();
-                self.state.begin_room();
+                self.state.begin_room(true);
                 self.state.phase = if is_boss_next {
                     GamePhase::Boss
                 } else {
