@@ -11,6 +11,7 @@
 
 pub mod dice_view;
 pub mod dungeon_view;
+pub mod rest_view;
 pub mod score_view;
 pub mod shop_view;
 pub mod upgrade_view;
@@ -119,7 +120,7 @@ impl App {
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
-            GamePhase::Rest => self.render_rest(frame),
+            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
             GamePhase::UpgradeSelectDie { die_cursor, kind, pending_die, .. } => {
                 self.render_upgrade_select_die(frame, *die_cursor, *kind, pending_die.as_ref())
             }
@@ -348,13 +349,21 @@ impl App {
         );
     }
 
-    fn render_rest(&self, frame: &mut ratatui::Frame) {
+    fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
+        let area = frame.area();
+
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        frame.render_widget(rest_view::RestView::new(cursor), main_area);
         frame.render_widget(
-            Paragraph::new(format!(
-                "REST  HP: {}/{}\n\n[H] Heal 15 HP\n[A] Augment a face (+1 value)\n[E] Enchant a face (+5 score)\n[Q] Quit",
-                self.state.hp, self.state.max_hp
-            )),
-            frame.area(),
+            Paragraph::new("[Up/Down] Select  [Enter] Confirm  [Q] Quit"),
+            hints_area,
         );
     }
 
@@ -473,7 +482,10 @@ impl App {
                 let cursor = *cursor;
                 self.handle_shop(code, cursor)
             }
-            GamePhase::Rest => self.handle_rest(code),
+            GamePhase::Rest { cursor } => {
+                let cursor = *cursor;
+                self.handle_rest(code, cursor)
+            }
             GamePhase::UpgradeSelectDie { die_cursor, kind, from_shop, pending_die } => {
                 let (c, k, fs) = (*die_cursor, *kind, *from_shop);
                 let pd = pending_die.clone();
@@ -753,30 +765,45 @@ impl App {
         }
     }
 
-    fn handle_rest(&mut self, code: KeyCode) -> bool {
+    fn handle_rest(&mut self, code: KeyCode, cursor: usize) -> bool {
+        const NUM_OPTIONS: usize = 3;
         match code {
-            KeyCode::Char('h') | KeyCode::Char('H') => {
-                self.state.heal(15);
-                self.state.dungeon.current_floor_mut().advance();
-                self.transition_after_advance();
-                true
-            }
-            KeyCode::Char('a') | KeyCode::Char('A') => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Augment,
-                    from_shop: false,
-                    pending_die: None,
+            KeyCode::Up => {
+                self.state.phase = GamePhase::Rest {
+                    cursor: (cursor + NUM_OPTIONS - 1) % NUM_OPTIONS,
                 };
                 true
             }
-            KeyCode::Char('e') | KeyCode::Char('E') => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Enchant,
-                    from_shop: false,
-                    pending_die: None,
+            KeyCode::Down => {
+                self.state.phase = GamePhase::Rest {
+                    cursor: (cursor + 1) % NUM_OPTIONS,
                 };
+                true
+            }
+            KeyCode::Enter => {
+                match cursor {
+                    0 => {
+                        self.state.heal(15);
+                        self.state.dungeon.current_floor_mut().advance();
+                        self.transition_after_advance();
+                    }
+                    1 => {
+                        self.state.phase = GamePhase::UpgradeSelectDie {
+                            die_cursor: 0,
+                            kind: UpgradeKind::Augment,
+                            from_shop: false,
+                            pending_die: None,
+                        };
+                    }
+                    _ => {
+                        self.state.phase = GamePhase::UpgradeSelectDie {
+                            die_cursor: 0,
+                            kind: UpgradeKind::Enchant,
+                            from_shop: false,
+                            pending_die: None,
+                        };
+                    }
+                }
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
@@ -828,7 +855,7 @@ impl App {
                 true
             }
             KeyCode::Esc if !from_shop && pending_die.is_none() => {
-                self.state.phase = GamePhase::Rest;
+                self.state.phase = GamePhase::Rest { cursor: 0 };
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
@@ -925,7 +952,7 @@ impl App {
 
     fn phase_for_current_room(&self) -> GamePhase {
         match self.state.dungeon.current_floor().current_room() {
-            Some(room::Room::Rest) => GamePhase::Rest,
+            Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
             _ => GamePhase::Rolling,
         }
     }
@@ -989,7 +1016,7 @@ impl App {
     fn transition_after_advance(&mut self) {
         match self.state.dungeon.current_floor().current_room() {
             Some(room::Room::Rest) => {
-                self.state.phase = GamePhase::Rest;
+                self.state.phase = GamePhase::Rest { cursor: 0 };
             }
             Some(_) | None => {
                 let is_boss_next = self.state.dungeon.current_floor().boss_next();

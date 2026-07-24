@@ -134,6 +134,7 @@ impl Widget for DungeonView<'_> {
                     Paragraph::new("FAILED").render(title_area, buf)
                 }
             }
+            GamePhase::Rest { .. } => Paragraph::new("REST SITE").render(title_area, buf),
             _ => Paragraph::new("DUNGEON DICE").render(title_area, buf),
         };
         Paragraph::new(status_line)
