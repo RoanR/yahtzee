@@ -11,6 +11,7 @@
 
 pub mod dice_view;
 pub mod dungeon_view;
+pub mod rest_view;
 pub mod score_view;
 pub mod shop_view;
 pub mod upgrade_view;
