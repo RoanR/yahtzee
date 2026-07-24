@@ -348,13 +348,21 @@ impl App {
         );
     }
 
-    fn render_rest(&self, frame: &mut ratatui::Frame) {
+    fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
+        let area = frame.area();
+
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        frame.render_widget(rest_view::RestView::new(cursor), main_area);
         frame.render_widget(
-            Paragraph::new(format!(
-                "REST  HP: {}/{}\n\n[H] Heal 15 HP\n[A] Augment a face (+1 value)\n[E] Enchant a face (+5 score)\n[Q] Quit",
-                self.state.hp, self.state.max_hp
-            )),
-            frame.area(),
+            Paragraph::new("[Up/Down] Select  [Enter] Confirm  [Q] Quit"),
+            hints_area,
         );
     }
 
@@ -756,30 +764,45 @@ impl App {
         }
     }
 
-    fn handle_rest(&mut self, code: KeyCode) -> bool {
+    fn handle_rest(&mut self, code: KeyCode, cursor: usize) -> bool {
+        const NUM_OPTIONS: usize = 3;
         match code {
-            KeyCode::Char('h') | KeyCode::Char('H') => {
-                self.state.heal(15);
-                self.state.dungeon.current_floor_mut().advance();
-                self.transition_after_advance();
-                true
-            }
-            KeyCode::Char('a') | KeyCode::Char('A') => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Augment,
-                    from_shop: false,
-                    pending_die: None,
+            KeyCode::Up => {
+                self.state.phase = GamePhase::Rest {
+                    cursor: (cursor + NUM_OPTIONS - 1) % NUM_OPTIONS,
                 };
                 true
             }
-            KeyCode::Char('e') | KeyCode::Char('E') => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Enchant,
-                    from_shop: false,
-                    pending_die: None,
+            KeyCode::Down => {
+                self.state.phase = GamePhase::Rest {
+                    cursor: (cursor + 1) % NUM_OPTIONS,
                 };
+                true
+            }
+            KeyCode::Enter => {
+                match cursor {
+                    0 => {
+                        self.state.heal(15);
+                        self.state.dungeon.current_floor_mut().advance();
+                        self.transition_after_advance();
+                    }
+                    1 => {
+                        self.state.phase = GamePhase::UpgradeSelectDie {
+                            die_cursor: 0,
+                            kind: UpgradeKind::Augment,
+                            from_shop: false,
+                            pending_die: None,
+                        };
+                    }
+                    _ => {
+                        self.state.phase = GamePhase::UpgradeSelectDie {
+                            die_cursor: 0,
+                            kind: UpgradeKind::Enchant,
+                            from_shop: false,
+                            pending_die: None,
+                        };
+                    }
+                }
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
