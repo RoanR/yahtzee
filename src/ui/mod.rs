@@ -119,7 +119,7 @@ impl App {
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
-            GamePhase::Rest => self.render_rest(frame),
+            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
             GamePhase::UpgradeSelectDie { die_cursor, kind, pending_die, .. } => {
                 self.render_upgrade_select_die(frame, *die_cursor, *kind, pending_die.as_ref())
             }
@@ -473,7 +473,10 @@ impl App {
                 let cursor = *cursor;
                 self.handle_shop(code, cursor)
             }
-            GamePhase::Rest => self.handle_rest(code),
+            GamePhase::Rest { cursor } => {
+                let cursor = *cursor;
+                self.handle_rest(code, cursor)
+            }
             GamePhase::UpgradeSelectDie { die_cursor, kind, from_shop, pending_die } => {
                 let (c, k, fs) = (*die_cursor, *kind, *from_shop);
                 let pd = pending_die.clone();
@@ -828,7 +831,7 @@ impl App {
                 true
             }
             KeyCode::Esc if !from_shop && pending_die.is_none() => {
-                self.state.phase = GamePhase::Rest;
+                self.state.phase = GamePhase::Rest { cursor: 0 };
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
@@ -925,7 +928,7 @@ impl App {
 
     fn phase_for_current_room(&self) -> GamePhase {
         match self.state.dungeon.current_floor().current_room() {
-            Some(room::Room::Rest) => GamePhase::Rest,
+            Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
             _ => GamePhase::Rolling,
         }
     }
@@ -989,7 +992,7 @@ impl App {
     fn transition_after_advance(&mut self) {
         match self.state.dungeon.current_floor().current_room() {
             Some(room::Room::Rest) => {
-                self.state.phase = GamePhase::Rest;
+                self.state.phase = GamePhase::Rest { cursor: 0 };
             }
             Some(_) | None => {
                 let is_boss_next = self.state.dungeon.current_floor().boss_next();

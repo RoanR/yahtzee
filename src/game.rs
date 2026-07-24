@@ -52,7 +52,7 @@ pub enum GamePhase {
         cursor: usize,
     },
     // Player is at a campfire: pick heal or upgrade.
-    Rest,
+    Rest { cursor: usize },
     // Player is picking which die to upgrade (campfire or shop) or replace (shop special die).
     // When pending_die is Some, Enter replaces the selected die instead of going to face select.
     UpgradeSelectDie { die_cursor: usize, kind: UpgradeKind, from_shop: bool, pending_die: Option<Die> },
@@ -93,7 +93,7 @@ impl GameState {
     pub fn new(rng: &mut impl Rng) -> Self {
         let dungeon = Dungeon::new(rng);
         let starting_phase = match dungeon.current_floor().current_room() {
-            Some(room::Room::Rest) => GamePhase::Rest,
+            Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
             _ => GamePhase::Rolling,
         };
         Self {
