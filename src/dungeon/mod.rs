@@ -16,35 +16,31 @@ use crate::dungeon::generation::generate_floor;
 // ─── Floor ────────────────────────────────────────────────────────────────────
 
 pub struct Floor {
-    pub floor_num: usize, // 1-indexed
-    pub rooms: Vec<Room>, // always 3 non-boss rooms
+    pub floor_num: usize,
+    pub room_choices: Vec<[Room; 2]>, // pre-generated pairs; 3 per floor
+    pub rooms_taken: Vec<usize>,      // chosen option index (0 or 1) per completed step
     pub boss: BossRoom,
-    pub current_room: usize, // index into rooms; when == rooms.len(), boss is next
+    pub step: usize, // current step: 0-2 = rooms, 3 = boss
 }
 
 impl Floor {
-    // Returns the current non-boss room, or None if the boss is next.
+    // Returns the active room for the current step, or None if no choice has been
+    // made yet (choosing phase) or the boss is next.
     pub fn current_room(&self) -> Option<&Room> {
-        if self.current_room < self.rooms.len() {
-            Some(&self.rooms[self.current_room])
-        } else {
-            None
-        }
+        let choice = self.rooms_taken.get(self.step)?;
+        self.room_choices.get(self.step)?.get(*choice)
     }
 
-    // Returns the current non-boss room as mut, or None if the boss is next.
+    // Mutable variant of current_room.
     pub fn current_room_mut(&mut self) -> Option<&mut Room> {
-        if self.current_room < self.rooms.len() {
-            Some(&mut self.rooms[self.current_room])
-        } else {
-            None
-        }
+        let choice = *self.rooms_taken.get(self.step)?;
+        self.room_choices.get_mut(self.step)?.get_mut(choice)
     }
 
-    // Advance to the next room. Returns false if already past the last room.
+    // Advance to the next step. Returns false if already past the last step.
     pub fn advance(&mut self) -> bool {
-        if self.current_room <= self.rooms.len() {
-            self.current_room += 1;
+        if self.step <= self.room_choices.len() {
+            self.step += 1;
             true
         } else {
             false
@@ -53,7 +49,17 @@ impl Floor {
 
     // True when the player should enter the boss encounter.
     pub fn boss_next(&self) -> bool {
-        self.current_room == self.rooms.len()
+        self.step == self.room_choices.len()
+    }
+
+    // Record the player's room choice for the current step. idx is 0 or 1.
+    pub fn choose(&mut self, idx: usize) {
+        self.rooms_taken.push(idx);
+    }
+
+    // Returns the two room options for the current step, or None if boss is next.
+    pub fn next_options(&self) -> Option<&[Room; 2]> {
+        self.room_choices.get(self.step)
     }
 }
 

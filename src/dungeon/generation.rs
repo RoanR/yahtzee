@@ -113,14 +113,17 @@ fn random_room(floor_num: usize, rng: &mut impl Rng) -> Room {
 
 // ─── Floor generation ─────────────────────────────────────────────────────────
 
-// Generate a complete floor: 3 random rooms + the floor's boss.
+// Generate a complete floor: 3 pairs of room options + the floor's boss.
 pub fn generate_floor(floor_num: usize, rng: &mut impl Rng) -> Floor {
-    let rooms = (0..3).map(|_| random_room(floor_num, rng)).collect();
+    let room_choices = (0..3)
+        .map(|_| [random_room(floor_num, rng), random_room(floor_num, rng)])
+        .collect();
     let boss = boss_for_floor(floor_num);
     Floor {
         floor_num,
-        rooms,
+        room_choices,
+        rooms_taken: vec![],
         boss,
-        current_room: 0,
+        step: 0,
     }
 }

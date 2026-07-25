@@ -119,7 +119,7 @@ impl GameState {
             self.used_this_room.clear();
 
             // Apply on_floor_start hooks from relics
-            if self.dungeon.current_floor().current_room == 0 {
+            if self.dungeon.current_floor().step == 0 {
                 self.relics.iter_mut().for_each(|r| r.on_floor_start());
             }
         }
