@@ -44,31 +44,39 @@ fn bar(&max: &usize, &current: &usize) -> String {
 
 // Generate the room navigation display bar
 fn room_nav(floor: &Floor) -> Vec<Span<'_>> {
-    let room_num = floor.current_room;
-    let room_tot = floor.rooms.len() - 1;
-    if room_num == room_tot {
-        vec![Span::styled(
+    if floor.boss_next() {
+        return vec![Span::styled(
             "Boss",
             Style::new().fg(ratatui::style::Color::Cyan),
-        )]
-    } else {
-        let mut room_nav = vec![Span::styled(" [", Style::default())];
-        for (i, r) in floor.rooms.iter().enumerate() {
-            let style = if i == room_num {
-                Style::new().fg(ratatui::style::Color::Cyan)
-            } else if i < room_num {
-                Style::new().fg(ratatui::style::Color::DarkGray)
-            } else {
-                Style::default()
-            };
-            room_nav.push(Span::styled(r.short_form(), style));
-            if i != room_tot {
-                room_nav.push(Span::styled("-", Style::default()));
-            }
-        }
-        room_nav.push(Span::styled("] ", Style::default()));
-        room_nav
+        )];
     }
+
+    let total = floor.room_choices.len();
+    let mut spans = vec![Span::styled(" [", Style::default())];
+    for s in 0..total {
+        let (text, style) = if s < floor.step {
+            // Completed step: show the chosen room type in gray
+            let chosen = floor.rooms_taken[s];
+            (floor.room_choices[s][chosen].short_form(), Style::new().fg(ratatui::style::Color::DarkGray))
+        } else if s == floor.step {
+            // Current step: show room type if chosen, "?" if still choosing
+            let text = if floor.rooms_taken.len() > floor.step {
+                floor.room_choices[s][floor.rooms_taken[s]].short_form()
+            } else {
+                "?".to_string()
+            };
+            (text, Style::new().fg(ratatui::style::Color::Cyan))
+        } else {
+            // Future step
+            ("?".to_string(), Style::default())
+        };
+        spans.push(Span::styled(text, style));
+        if s < total - 1 {
+            spans.push(Span::styled("-", Style::default()));
+        }
+    }
+    spans.push(Span::styled("] ", Style::default()));
+    spans
 }
 
 pub struct DungeonView<'a> {

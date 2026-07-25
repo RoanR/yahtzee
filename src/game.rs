@@ -63,6 +63,8 @@ pub enum GamePhase {
         kind: UpgradeKind,
         from_shop: bool,
     },
+    // Player is choosing between two room options before entering the next room.
+    ChoosingRoom { cursor: usize },
     // Player just defeated a boss; pick a new category to unlock.
     CategoryUnlock,
     // Run is over.
@@ -92,10 +94,6 @@ impl GameState {
     // Start a new run with default starting stats.
     pub fn new(rng: &mut impl Rng) -> Self {
         let dungeon = Dungeon::new(rng);
-        let starting_phase = match dungeon.current_floor().current_room() {
-            Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
-            _ => GamePhase::Rolling,
-        };
         Self {
             dice_pool: DicePool::new(),
             hp: 30,
@@ -105,7 +103,7 @@ impl GameState {
             unlocked: vec![ScoreCategory::HighDie, ScoreCategory::Chance],
             used_this_room: vec![],
             relics: vec![],
-            phase: starting_phase,
+            phase: GamePhase::ChoosingRoom { cursor: 0 },
             base_rolls: 3,
         }
     }
@@ -119,7 +117,7 @@ impl GameState {
             self.used_this_room.clear();
 
             // Apply on_floor_start hooks from relics
-            if self.dungeon.current_floor().current_room == 0 {
+            if self.dungeon.current_floor().step == 0 {
                 self.relics.iter_mut().for_each(|r| r.on_floor_start());
             }
         }
@@ -227,7 +225,7 @@ impl GameState {
     // Descend to the next floor after unlocking a category.
     pub fn descend(&mut self, rng: &mut impl Rng) {
         self.dungeon.descend(rng);
-        self.begin_room(true);
+        // begin_room is called after the player confirms their room choice
     }
 
     // ── Relic management ──────────────────────────────────────────────────────

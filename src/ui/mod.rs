@@ -11,6 +11,7 @@
 
 pub mod dice_view;
 pub mod dungeon_view;
+pub mod path_view;
 pub mod rest_view;
 pub mod score_view;
 pub mod shop_view;
@@ -130,6 +131,7 @@ impl App {
                 kind,
                 ..
             } => self.render_upgrade_select_face(frame, *die_index, *face_cursor, *kind),
+            GamePhase::ChoosingRoom { cursor } => self.render_choosing_room(frame, *cursor),
             GamePhase::CategoryUnlock => self.render_unlock(frame),
             GamePhase::GameOver => self.render_game_over(frame),
         }
@@ -462,6 +464,16 @@ impl App {
         );
     }
 
+    fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
+        let [header_area, content_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Fill(1),
+        ])
+        .areas(frame.area());
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
+    }
+
     // ── Input ─────────────────────────────────────────────────────────────────
 
     // Handle a key press. Returns false to signal the event loop to exit.
@@ -499,6 +511,10 @@ impl App {
             } => {
                 let (di, fc, k, fs) = (*die_index, *face_cursor, *kind, *from_shop);
                 self.handle_upgrade_select_face(code, di, fc, k, fs)
+            }
+            GamePhase::ChoosingRoom { cursor } => {
+                let cursor = *cursor;
+                self.handle_choosing_room(code, cursor)
             }
             GamePhase::CategoryUnlock => self.handle_unlock(code),
             GamePhase::GameOver => self.handle_game_over(code),
@@ -930,7 +946,7 @@ impl App {
         if self.unlock_options.is_none() {
             // All categories already unlocked: any key descends.
             self.state.descend(&mut self.rng);
-            self.state.phase = self.phase_for_current_room();
+            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
             return true;
         }
 
@@ -944,16 +960,37 @@ impl App {
             self.state.unlock_category(cat);
             self.unlock_options = None;
             self.state.descend(&mut self.rng);
-            self.state.phase = self.phase_for_current_room();
+            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
         }
 
         true
     }
 
-    fn phase_for_current_room(&self) -> GamePhase {
-        match self.state.dungeon.current_floor().current_room() {
-            Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
-            _ => GamePhase::Rolling,
+    fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
+        match code {
+            KeyCode::Left | KeyCode::Up => {
+                self.state.phase = GamePhase::ChoosingRoom {
+                    cursor: (cursor + 1) % 2,
+                };
+                true
+            }
+            KeyCode::Right | KeyCode::Down => {
+                self.state.phase = GamePhase::ChoosingRoom {
+                    cursor: (cursor + 1) % 2,
+                };
+                true
+            }
+            KeyCode::Enter => {
+                self.state.dungeon.current_floor_mut().choose(cursor);
+                self.state.begin_room(true);
+                self.state.phase = match self.state.dungeon.current_floor().current_room() {
+                    Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
+                    _ => GamePhase::Rolling,
+                };
+                true
+            }
+            KeyCode::Char('q') | KeyCode::Char('Q') => false,
+            _ => true,
         }
     }
 
@@ -1012,21 +1049,13 @@ impl App {
         }
     }
 
-    // Set the correct phase after the floor's current_room index has been advanced.
+    // Set the correct phase after the floor's step index has been advanced.
     fn transition_after_advance(&mut self) {
-        match self.state.dungeon.current_floor().current_room() {
-            Some(room::Room::Rest) => {
-                self.state.phase = GamePhase::Rest { cursor: 0 };
-            }
-            Some(_) | None => {
-                let is_boss_next = self.state.dungeon.current_floor().boss_next();
-                self.state.begin_room(true);
-                self.state.phase = if is_boss_next {
-                    GamePhase::Boss
-                } else {
-                    GamePhase::Rolling
-                };
-            }
+        if self.state.dungeon.current_floor().boss_next() {
+            self.state.begin_room(true);
+            self.state.phase = GamePhase::Boss;
+        } else {
+            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
         }
     }
 
