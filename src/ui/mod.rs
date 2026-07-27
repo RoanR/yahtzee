@@ -122,9 +122,12 @@ impl App {
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
             GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
-            GamePhase::UpgradeSelectDie { die_cursor, kind, pending_die, .. } => {
-                self.render_upgrade_select_die(frame, *die_cursor, *kind, pending_die.as_ref())
-            }
+            GamePhase::UpgradeSelectDie {
+                die_cursor,
+                kind,
+                pending_die,
+                ..
+            } => self.render_upgrade_select_die(frame, *die_cursor, *kind, pending_die.as_ref()),
             GamePhase::UpgradeSelectFace {
                 die_index,
                 face_cursor,
@@ -465,11 +468,8 @@ impl App {
     }
 
     fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let [header_area, content_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Fill(1),
-        ])
-        .areas(frame.area());
+        let [header_area, content_area] =
+            Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(frame.area());
         frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
         frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
     }
@@ -498,7 +498,12 @@ impl App {
                 let cursor = *cursor;
                 self.handle_rest(code, cursor)
             }
-            GamePhase::UpgradeSelectDie { die_cursor, kind, from_shop, pending_die } => {
+            GamePhase::UpgradeSelectDie {
+                die_cursor,
+                kind,
+                from_shop,
+                pending_die,
+            } => {
                 let (c, k, fs) = (*die_cursor, *kind, *from_shop);
                 let pd = pending_die.clone();
                 self.handle_upgrade_select_die(code, c, k, fs, pd)
