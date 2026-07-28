@@ -22,15 +22,15 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
+use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
 use ratatui::{
-    Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Block, Paragraph},
+    Terminal, Viewport,
 };
 
 use crate::{
@@ -148,7 +148,7 @@ impl App {
     // the width. On an 80-col terminal the left gets ~32 cols (enough for 5 dice
     // at 5 chars each) and the right gets ~48 cols (enough for long category names).
     fn render_game(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint().to_string());
+        let main_area = self.vertical_layout(frame, self.roll_hint());
 
         // Inner horizontal split inside main_area.
         let [left_area, right_area] =
@@ -184,7 +184,7 @@ impl App {
             _ => return,
         };
 
-        let loot_area = self.vertical_layout(frame, "Press any key to continue...".to_string());
+        let loot_area = self.vertical_layout(frame, "Press any key to continue...");
 
         // Central loot area or HP loss
         let is_boss = self.state.dungeon.current_floor().boss_next();
@@ -256,9 +256,21 @@ impl App {
     }
 
     fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize, from_boss: bool) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit".into(),
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(frame.area());
+
+        if from_boss {
+            frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
+        } else {
+            frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        }
+        frame.render_widget(
+            Paragraph::new("[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit"),
+            hints_area,
         );
 
         let [left_area, right_area] =
@@ -284,7 +296,7 @@ impl App {
     fn render_shop(&self, frame: &mut ratatui::Frame, items: &[shop::ShopItem], cursor: usize) {
         let main_area = self.vertical_layout(
             frame,
-            "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit".into(),
+            "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit",
         );
 
         frame.render_widget(
@@ -295,7 +307,7 @@ impl App {
 
     fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
         let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit".into());
+            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit");
         frame.render_widget(rest_view::RestView::new(cursor), main_area);
     }
 
@@ -306,8 +318,12 @@ impl App {
         kind: UpgradeKind,
         pending_die: Option<&Die>,
     ) {
-        let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit".into());
+        let hint = if pending_die.is_some() {
+            "[Left/Right] Select  [Enter] Replace  [Q] Quit"
+        } else {
+            "[Left/Right] Select  [Enter] Confirm  [Esc] Back  [Q] Quit"
+        };
+        let main_area = self.vertical_layout(frame, hint);
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
                 .areas(main_area);
@@ -380,9 +396,8 @@ impl App {
     }
 
     fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let [header_area, content_area] =
-            Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(frame.area());
-        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        let content_area =
+            self.vertical_layout(frame, "[Left/Right] Choose  [Enter] Confirm  [Q] Quit");
         frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
     }
 
@@ -886,15 +901,11 @@ impl App {
     fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
         match code {
             KeyCode::Left | KeyCode::Up => {
-                self.state.phase = GamePhase::ChoosingRoom {
-                    cursor: (cursor + 1) % 2,
-                };
+                self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
                 true
             }
             KeyCode::Right | KeyCode::Down => {
-                self.state.phase = GamePhase::ChoosingRoom {
-                    cursor: (cursor + 1) % 2,
-                };
+                self.state.phase = GamePhase::ChoosingRoom { cursor: 1 };
                 true
             }
             KeyCode::Enter => {
@@ -1006,10 +1017,7 @@ impl App {
         Some([chosen[0].clone(), chosen[1].clone()])
     }
 
-    // Applies the vertical layout, including rendering the hints and dungeon view
-    // Returning the main central rect
-    fn vertical_layout(&self, frame: &mut ratatui::Frame, hints: String) -> Rect {
-        // Apply the vertical division
+    fn vertical_layout(&self, frame: &mut ratatui::Frame, hints: &str) -> Rect {
         let [header_area, body_area, hints_area] = Layout::vertical([
             Constraint::Length(2),
             Constraint::Min(0),

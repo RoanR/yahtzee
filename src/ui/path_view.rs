@@ -1,10 +1,8 @@
 // Path choice screen: rendered when the player is selecting their next room.
 //
-// Layout (content area, below the 2-row dungeon header):
-//   Row 0: title "CHOOSE YOUR PATH" centered
-//   Row 1: empty gap
-//   Rows 2..end-1: two room panels side by side
-//   Last row: hint text
+// Layout (content area):
+//   Row 0-1: title "CHOOSE YOUR PATH" centered
+//   Rows 2..end: two room panels side by side
 
 use ratatui::{
     buffer::Buffer,
@@ -35,10 +33,9 @@ impl Widget for PathView<'_> {
             None => return,
         };
 
-        let [title_area, panels_area, hint_area] = Layout::vertical([
+        let [title_area, panels_area] = Layout::vertical([
             Constraint::Length(2),
             Constraint::Fill(1),
-            Constraint::Length(1),
         ])
         .areas(area);
 
@@ -55,10 +52,6 @@ impl Widget for PathView<'_> {
 
         render_room_panel(&options[0], self.cursor == 0, left_area, buf);
         render_room_panel(&options[1], self.cursor == 1, right_area, buf);
-
-        Paragraph::new("[Left/Right] Choose  [Enter] Confirm  [Q] Quit")
-            .centered()
-            .render(hint_area, buf);
     }
 }
 
