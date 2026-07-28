@@ -115,9 +115,7 @@ impl App {
     fn render(&self, frame: &mut ratatui::Frame) {
         match &self.state.phase {
             GamePhase::Rolling => self.render_game(frame),
-            GamePhase::SelectingCategory { cursor, from_boss } => {
-                self.render_selecting(frame, *cursor, *from_boss)
-            }
+            GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_boss(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
@@ -294,10 +292,8 @@ impl App {
     }
 
     fn render_shop(&self, frame: &mut ratatui::Frame, items: &[shop::ShopItem], cursor: usize) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit",
-        );
+        let main_area =
+            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit");
 
         frame.render_widget(
             shop_view::ShopView::new(items, self.state.gold, cursor),
@@ -306,8 +302,7 @@ impl App {
     }
 
     fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit");
+        let main_area = self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit");
         frame.render_widget(rest_view::RestView::new(cursor), main_area);
     }
 
