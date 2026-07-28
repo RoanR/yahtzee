@@ -208,21 +208,9 @@ impl App {
         );
     }
 
-    // Boss screen layout:
-    //
-    //   [header]  Length(2)  BossHeaderView (boss name + gold row 0,
-    //                                        weakness + target + HP bar row 1)
-    //   [main]    Min(0)     horizontal split (same as render_game):
-    //     [left]  Fill(2)    DiceView (die boxes + rolls indicator)
-    //     [right] Fill(3)    ScoreView
-    //   [hints]   Length(1)  keybind line
-    //
-    // BossHeaderView is a new widget defined in dungeon_view.rs. It takes the same
-    // &GameState as DungeonView and pulls boss data from state.dungeon.current_floor().boss.
     fn render_boss(&self, frame: &mut ratatui::Frame) {
         let area = frame.area();
 
-        // Identical outer vertical + inner horizontal split as render_game.
         let [header_area, main_area, hints_area] = Layout::vertical([
             Constraint::Length(2),
             Constraint::Min(0),
@@ -233,10 +221,8 @@ impl App {
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
 
-        // Use BossHeaderView instead of DungeonView for the header.
-        frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
 
-        // Remaining widgets identical to render_game.
         let dice_widget = match &self.roll_animation {
             Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
             None => dice_view::DiceView::new(&self.state.dice_pool),
@@ -253,7 +239,7 @@ impl App {
         frame.render_widget(Paragraph::new(self.roll_hint()), hints_area);
     }
 
-    fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize, from_boss: bool) {
+    fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
         let [header_area, main_area, hints_area] = Layout::vertical([
             Constraint::Length(2),
             Constraint::Min(0),
@@ -261,11 +247,7 @@ impl App {
         ])
         .areas(frame.area());
 
-        if from_boss {
-            frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
-        } else {
-            frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
-        }
+        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
         frame.render_widget(
             Paragraph::new("[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit"),
             hints_area,
