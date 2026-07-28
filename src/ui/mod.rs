@@ -318,8 +318,12 @@ impl App {
         kind: UpgradeKind,
         pending_die: Option<&Die>,
     ) {
-        let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit".into());
+        let hint = if pending_die.is_some() {
+            "[Left/Right] Select  [Enter] Replace  [Q] Quit"
+        } else {
+            "[Left/Right] Select  [Enter] Confirm  [Esc] Back  [Q] Quit"
+        };
+        let main_area = self.vertical_layout(frame, hint);
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
                 .areas(main_area);
