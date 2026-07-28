@@ -209,19 +209,10 @@ impl App {
     }
 
     fn render_boss(&self, frame: &mut ratatui::Frame) {
-        let area = frame.area();
-
-        let [header_area, main_area, hints_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ])
-        .areas(area);
+        let main_area = self.vertical_layout(frame, self.roll_hint());
 
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
-
-        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
 
         let dice_widget = match &self.roll_animation {
             Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
@@ -236,21 +227,12 @@ impl App {
             ),
             right_area,
         );
-        frame.render_widget(Paragraph::new(self.roll_hint()), hints_area);
     }
 
     fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let [header_area, main_area, hints_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ])
-        .areas(frame.area());
-
-        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
-        frame.render_widget(
-            Paragraph::new("[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit"),
-            hints_area,
+        let main_area = self.vertical_layout(
+            frame,
+            "[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit",
         );
 
         let [left_area, right_area] =
@@ -326,15 +308,10 @@ impl App {
         face_cursor: usize,
         kind: UpgradeKind,
     ) {
-        let area = frame.area();
-        let [header_area, main_area, hints_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ])
-        .areas(area);
-
-        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        let main_area = self.vertical_layout(
+            frame,
+            "[Left/Right] Select  [Enter] Upgrade  [Esc] Back  [Q] Quit",
+        );
         frame.render_widget(
             upgrade_view::FaceSelectView::new(
                 &self.state.dice_pool.dice[die_index],
@@ -343,10 +320,6 @@ impl App {
                 kind,
             ),
             main_area,
-        );
-        frame.render_widget(
-            Paragraph::new("[Left/Right] Select  [Enter] Upgrade  [Esc] Back  [Q] Quit"),
-            hints_area,
         );
     }
 
