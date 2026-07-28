@@ -256,9 +256,21 @@ impl App {
     }
 
     fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize, from_boss: bool) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit".into(),
+        let [header_area, main_area, hints_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .areas(frame.area());
+
+        if from_boss {
+            frame.render_widget(dungeon_view::BossHeaderView::new(&self.state), header_area);
+        } else {
+            frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        }
+        frame.render_widget(
+            Paragraph::new("[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit"),
+            hints_area,
         );
 
         let [left_area, right_area] =
