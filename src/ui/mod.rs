@@ -22,15 +22,15 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
+use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
 use ratatui::{
-    Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Block, Paragraph},
+    Terminal, Viewport,
 };
 
 use crate::{
@@ -886,15 +886,11 @@ impl App {
     fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
         match code {
             KeyCode::Left | KeyCode::Up => {
-                self.state.phase = GamePhase::ChoosingRoom {
-                    cursor: (cursor + 1) % 2,
-                };
+                self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
                 true
             }
             KeyCode::Right | KeyCode::Down => {
-                self.state.phase = GamePhase::ChoosingRoom {
-                    cursor: (cursor + 1) % 2,
-                };
+                self.state.phase = GamePhase::ChoosingRoom { cursor: 1 };
                 true
             }
             KeyCode::Enter => {
