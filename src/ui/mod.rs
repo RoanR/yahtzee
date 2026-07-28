@@ -148,7 +148,7 @@ impl App {
     // the width. On an 80-col terminal the left gets ~32 cols (enough for 5 dice
     // at 5 chars each) and the right gets ~48 cols (enough for long category names).
     fn render_game(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint().to_string());
+        let main_area = self.vertical_layout(frame, self.roll_hint());
 
         // Inner horizontal split inside main_area.
         let [left_area, right_area] =
@@ -184,7 +184,7 @@ impl App {
             _ => return,
         };
 
-        let loot_area = self.vertical_layout(frame, "Press any key to continue...".to_string());
+        let loot_area = self.vertical_layout(frame, "Press any key to continue...");
 
         // Central loot area or HP loss
         let is_boss = self.state.dungeon.current_floor().boss_next();
@@ -296,7 +296,7 @@ impl App {
     fn render_shop(&self, frame: &mut ratatui::Frame, items: &[shop::ShopItem], cursor: usize) {
         let main_area = self.vertical_layout(
             frame,
-            "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit".into(),
+            "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit",
         );
 
         frame.render_widget(
@@ -307,7 +307,7 @@ impl App {
 
     fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
         let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit".into());
+            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit");
         frame.render_widget(rest_view::RestView::new(cursor), main_area);
     }
 
@@ -1017,10 +1017,7 @@ impl App {
         Some([chosen[0].clone(), chosen[1].clone()])
     }
 
-    // Applies the vertical layout, including rendering the hints and dungeon view
-    // Returning the main central rect
-    fn vertical_layout(&self, frame: &mut ratatui::Frame, hints: String) -> Rect {
-        // Apply the vertical division
+    fn vertical_layout(&self, frame: &mut ratatui::Frame, hints: &str) -> Rect {
         let [header_area, body_area, hints_area] = Layout::vertical([
             Constraint::Length(2),
             Constraint::Min(0),
