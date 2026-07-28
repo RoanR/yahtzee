@@ -396,9 +396,8 @@ impl App {
     }
 
     fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let [header_area, content_area] =
-            Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(frame.area());
-        frame.render_widget(dungeon_view::DungeonView::new(&self.state), header_area);
+        let content_area =
+            self.vertical_layout(frame, "[Left/Right] Choose  [Enter] Confirm  [Q] Quit");
         frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
     }
 
