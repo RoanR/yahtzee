@@ -22,15 +22,15 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
+use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 use ratatui::{
+    Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     text::Line,
-    widgets::{Block, Paragraph},
-    Terminal, Viewport,
+    widgets::{Block, Paragraph, Widget},
 };
 
 use crate::{
@@ -117,9 +117,14 @@ impl App {
             GamePhase::Rolling => self.render_game(frame),
             GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
             GamePhase::Scored { .. } => self.render_scored(frame),
-            GamePhase::Boss => self.render_boss(frame),
-            GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
-            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
+            GamePhase::Boss => self.render_game(frame),
+            GamePhase::Shop { items, cursor } => self.render_rest_shop(
+                frame,
+                shop_view::ShopView::new(items, self.state.gold, *cursor),
+            ),
+            GamePhase::Rest { cursor } => {
+                self.render_rest_shop(frame, rest_view::RestView::new(*cursor))
+            }
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
@@ -208,27 +213,6 @@ impl App {
         );
     }
 
-    fn render_boss(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint());
-
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
-
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            ),
-            right_area,
-        );
-    }
-
     fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
         let main_area = self.vertical_layout(
             frame,
@@ -255,19 +239,13 @@ impl App {
         );
     }
 
-    fn render_shop(&self, frame: &mut ratatui::Frame, items: &[shop::ShopItem], cursor: usize) {
-        let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit");
-
-        frame.render_widget(
-            shop_view::ShopView::new(items, self.state.gold, cursor),
-            main_area,
+    // Used for shop and rest sites
+    fn render_rest_shop(&self, frame: &mut ratatui::Frame, widget: impl Widget) {
+        let main_area = self.vertical_layout(
+            frame,
+            "[Up/Down] Select  [Enter] Confirm  [L] Leave [Q] Quit",
         );
-    }
-
-    fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let main_area = self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit");
-        frame.render_widget(rest_view::RestView::new(cursor), main_area);
+        frame.render_widget(widget, main_area);
     }
 
     fn render_upgrade_select_die(
@@ -602,7 +580,6 @@ impl App {
                 if !can_afford {
                     return true;
                 }
-
                 let item = match &mut self.state.phase {
                     GamePhase::Shop { items, cursor } if *cursor < items.len() => {
                         Some(items.remove(*cursor))
@@ -702,6 +679,11 @@ impl App {
                         };
                     }
                 }
+                true
+            }
+            KeyCode::Char('l') | KeyCode::Char('L') | KeyCode::Esc => {
+                self.state.dungeon.current_floor_mut().advance();
+                self.transition_after_advance();
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
