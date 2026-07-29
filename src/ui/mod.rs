@@ -22,15 +22,15 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use rand::{rngs::ThreadRng, seq::IndexedRandom, Rng};
+use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 use ratatui::{
+    Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Block, Paragraph},
-    Terminal, Viewport,
 };
 
 use crate::{
@@ -117,7 +117,7 @@ impl App {
             GamePhase::Rolling => self.render_game(frame),
             GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
             GamePhase::Scored { .. } => self.render_scored(frame),
-            GamePhase::Boss => self.render_boss(frame),
+            GamePhase::Boss => self.render_game(frame),
             GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
             GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
             GamePhase::UpgradeSelectDie {
@@ -205,27 +205,6 @@ impl App {
             Paragraph::new(Line::from(consequence).centered())
                 .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded)),
             loot_area,
-        );
-    }
-
-    fn render_boss(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint());
-
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
-
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            ),
-            right_area,
         );
     }
 
