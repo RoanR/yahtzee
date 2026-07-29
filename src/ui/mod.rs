@@ -30,7 +30,7 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
     text::Line,
-    widgets::{Block, Paragraph},
+    widgets::{Block, Paragraph, Widget},
 };
 
 use crate::{
@@ -118,8 +118,13 @@ impl App {
             GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_game(frame),
-            GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
-            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
+            GamePhase::Shop { items, cursor } => self.render_rest_shop(
+                frame,
+                shop_view::ShopView::new(items, self.state.gold, *cursor),
+            ),
+            GamePhase::Rest { cursor } => {
+                self.render_rest_shop(frame, rest_view::RestView::new(*cursor))
+            }
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
@@ -234,19 +239,13 @@ impl App {
         );
     }
 
-    fn render_shop(&self, frame: &mut ratatui::Frame, items: &[shop::ShopItem], cursor: usize) {
-        let main_area =
-            self.vertical_layout(frame, "[Up/Down] Select  [Enter] Buy  [L] Leave  [Q] Quit");
-
-        frame.render_widget(
-            shop_view::ShopView::new(items, self.state.gold, cursor),
-            main_area,
+    // Used for shop and rest sites
+    fn render_rest_shop(&self, frame: &mut ratatui::Frame, widget: impl Widget) {
+        let main_area = self.vertical_layout(
+            frame,
+            "[Up/Down] Select  [Enter] Confirm  [L] Leave [Q] Quit",
         );
-    }
-
-    fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let main_area = self.vertical_layout(frame, "[Up/Down] Select  [Enter] Confirm  [Q] Quit");
-        frame.render_widget(rest_view::RestView::new(cursor), main_area);
+        frame.render_widget(widget, main_area);
     }
 
     fn render_upgrade_select_die(
@@ -581,7 +580,6 @@ impl App {
                 if !can_afford {
                     return true;
                 }
-
                 let item = match &mut self.state.phase {
                     GamePhase::Shop { items, cursor } if *cursor < items.len() => {
                         Some(items.remove(*cursor))
@@ -681,6 +679,11 @@ impl App {
                         };
                     }
                 }
+                true
+            }
+            KeyCode::Char('l') | KeyCode::Char('L') | KeyCode::Esc => {
+                self.state.dungeon.current_floor_mut().advance();
+                self.transition_after_advance();
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
