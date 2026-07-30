@@ -52,10 +52,17 @@ pub enum GamePhase {
         cursor: usize,
     },
     // Player is at a campfire: pick heal or upgrade.
-    Rest { cursor: usize },
+    Rest {
+        cursor: usize,
+    },
     // Player is picking which die to upgrade (campfire or shop) or replace (shop special die).
     // When pending_die is Some, Enter replaces the selected die instead of going to face select.
-    UpgradeSelectDie { die_cursor: usize, kind: UpgradeKind, from_shop: bool, pending_die: Option<Die> },
+    UpgradeSelectDie {
+        die_cursor: usize,
+        kind: UpgradeKind,
+        from_shop: bool,
+        pending_die: Option<Die>,
+    },
     // Player is picking which face of the chosen die to upgrade (campfire or shop).
     UpgradeSelectFace {
         die_index: usize,
@@ -64,11 +71,26 @@ pub enum GamePhase {
         from_shop: bool,
     },
     // Player is choosing between two room options before entering the next room.
-    ChoosingRoom { cursor: usize },
+    ChoosingRoom {
+        cursor: usize,
+    },
     // Player just defeated a boss; pick a new category to unlock.
     CategoryUnlock,
     // Run is over.
     GameOver,
+}
+
+impl GamePhase {
+    // If there is a cursor, then set it to the new value
+    pub fn set_cursor(&mut self, new_cursor: usize) {
+        match self {
+            Self::SelectingCategory { cursor, .. }
+            | Self::Shop { cursor, .. }
+            | Self::Rest { cursor }
+            | Self::ChoosingRoom { cursor } => *cursor = new_cursor,
+            _ => (),
+        }
+    }
 }
 
 // ─── GameState ────────────────────────────────────────────────────────────────
