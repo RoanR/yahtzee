@@ -120,13 +120,16 @@ impl App {
             }
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_dice_score(frame, None),
-            GamePhase::Shop { items, cursor } => self.render_rest_shop(
+            GamePhase::Shop { items, cursor } => self.render_body(
                 frame,
+                "[Up/Down] Select  [Enter] Confirm  [L] Leave [Q] Quit",
                 shop_view::ShopView::new(items, self.state.gold, *cursor),
             ),
-            GamePhase::Rest { cursor } => {
-                self.render_rest_shop(frame, rest_view::RestView::new(*cursor))
-            }
+            GamePhase::Rest { cursor } => self.render_body(
+                frame,
+                "[Up/Down] Select  [Enter] Confirm  [L] Leave [Q] Quit",
+                rest_view::RestView::new(*cursor),
+            ),
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
@@ -138,8 +141,21 @@ impl App {
                 face_cursor,
                 kind,
                 ..
-            } => self.render_upgrade_select_face(frame, *die_index, *face_cursor, *kind),
-            GamePhase::ChoosingRoom { cursor } => self.render_choosing_room(frame, *cursor),
+            } => self.render_body(
+                frame,
+                "[Left/Right] Select  [Enter] Upgrade  [Esc] Back  [Q] Quit",
+                upgrade_view::FaceSelectView::new(
+                    &self.state.dice_pool.dice[*die_index],
+                    *die_index,
+                    *face_cursor,
+                    *kind,
+                ),
+            ),
+            GamePhase::ChoosingRoom { cursor } => self.render_body(
+                frame,
+                "[Left/Right] Choose  [Enter] Confirm  [Q] Quit",
+                path_view::PathView::new(&self.state, *cursor),
+            ),
             GamePhase::CategoryUnlock => self.render_unlock(frame),
             GamePhase::GameOver => self.render_game_over(frame),
         }
@@ -222,12 +238,9 @@ impl App {
         );
     }
 
-    // Used for shop and rest sites
-    fn render_rest_shop(&self, frame: &mut ratatui::Frame, widget: impl Widget) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select  [Enter] Confirm  [L] Leave [Q] Quit",
-        );
+    // Generic full-body screen: header + a single widget filling the body + hint line.
+    fn render_body(&self, frame: &mut ratatui::Frame, hint: &str, widget: impl Widget) {
+        let main_area = self.vertical_layout(frame, hint);
         frame.render_widget(widget, main_area);
     }
 
@@ -262,28 +275,6 @@ impl App {
         }
     }
 
-    fn render_upgrade_select_face(
-        &self,
-        frame: &mut ratatui::Frame,
-        die_index: usize,
-        face_cursor: usize,
-        kind: UpgradeKind,
-    ) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Left/Right] Select  [Enter] Upgrade  [Esc] Back  [Q] Quit",
-        );
-        frame.render_widget(
-            upgrade_view::FaceSelectView::new(
-                &self.state.dice_pool.dice[die_index],
-                die_index,
-                face_cursor,
-                kind,
-            ),
-            main_area,
-        );
-    }
-
     fn render_unlock(&self, frame: &mut ratatui::Frame) {
         let text = match &self.unlock_options {
             Some(options) => format!(
@@ -304,12 +295,6 @@ impl App {
             )),
             frame.area(),
         );
-    }
-
-    fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let content_area =
-            self.vertical_layout(frame, "[Left/Right] Choose  [Enter] Confirm  [Q] Quit");
-        frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
     }
 
     // ── Input ─────────────────────────────────────────────────────────────────
