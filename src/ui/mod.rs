@@ -634,12 +634,12 @@ impl App {
         enter: fn(&mut App, usize),
     ) -> bool {
         match code {
-            KeyCode::Up => {
+            KeyCode::Up if len > 0 => {
                 self.state.phase.set_cursor((cursor + len - 1) % len);
                 true
             }
-            KeyCode::Down => {
-                self.state.phase.set_cursor((cursor + len + 1) % len);
+            KeyCode::Down if len > 0 => {
+                self.state.phase.set_cursor((cursor + 1) % len);
                 true
             }
             KeyCode::Char('l') | KeyCode::Char('L') | KeyCode::Esc => {
