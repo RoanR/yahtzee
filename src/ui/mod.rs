@@ -114,10 +114,12 @@ impl App {
     // Dispatch to the correct screen renderer based on current phase.
     fn render(&self, frame: &mut ratatui::Frame) {
         match &self.state.phase {
-            GamePhase::Rolling => self.render_game(frame),
-            GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
+            GamePhase::Rolling => self.render_dice_score(frame, None),
+            GamePhase::SelectingCategory { cursor, .. } => {
+                self.render_dice_score(frame, Some(*cursor))
+            }
             GamePhase::Scored { .. } => self.render_scored(frame),
-            GamePhase::Boss => self.render_game(frame),
+            GamePhase::Boss => self.render_dice_score(frame, None),
             GamePhase::Shop { items, cursor } => self.render_rest_shop(
                 frame,
                 shop_view::ShopView::new(items, self.state.gold, *cursor),
@@ -143,20 +145,25 @@ impl App {
         }
     }
 
-    // Main game screen
+    // Main game screen, shared by Rolling/Boss (no cursor) and SelectingCategory
+    // (cursor into the available-categories list):
     //   [main]    Min(0)     horizontal split:
     //     [left]  Fill(2)    DiceView (die boxes + rolls indicator below)
     //     [right] Fill(3)    ScoreView (title + category list)
     // The Fill(2)/Fill(3) ratio gives the left panel ~40% and the right ~60% of
     // the width. On an 80-col terminal the left gets ~32 cols (enough for 5 dice
     // at 5 chars each) and the right gets ~48 cols (enough for long category names).
-    fn render_game(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint());
+    fn render_dice_score(&self, frame: &mut ratatui::Frame, cursor: Option<usize>) {
+        let hint = if cursor.is_some() {
+            "[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit"
+        } else {
+            self.roll_hint()
+        };
+        let main_area = self.vertical_layout(frame, hint);
 
         // Inner horizontal split inside main_area.
         let [left_area, right_area] =
-            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
-                .areas(main_area);
+            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
 
         // Render DiceView (die boxes + rolls indicator) into left_area.
         let dice_widget = match &self.roll_animation {
@@ -166,14 +173,16 @@ impl App {
         frame.render_widget(dice_widget, left_area);
 
         // Render ScoreView (title + categories) into right_area.
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            ),
-            right_area,
+        let score_widget = score_view::ScoreView::new(
+            &self.state.dice_pool,
+            &self.state.unlocked,
+            &self.state.used_this_room,
         );
+        let score_widget = match cursor {
+            Some(c) => score_widget.with_cursor(c),
+            None => score_widget,
+        };
+        frame.render_widget(score_widget, right_area);
     }
 
     // Scored result screen: shown after player scores, before advancing to next room.
@@ -210,32 +219,6 @@ impl App {
             Paragraph::new(Line::from(consequence).centered())
                 .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded)),
             loot_area,
-        );
-    }
-
-    fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit",
-        );
-
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
-
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            )
-            .with_cursor(cursor),
-            right_area,
         );
     }
 
