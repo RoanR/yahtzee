@@ -95,12 +95,12 @@ impl App {
         loop {
             self.tick_animation();
             terminal.draw(|f| self.render(f))?;
-            if event::poll(Duration::from_millis(16))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press && !self.handle_key(key.code) {
-                        break;
-                    }
-                }
+            if event::poll(Duration::from_millis(16))?
+                && let Event::Key(key) = event::read()?
+                && key.kind == KeyEventKind::Press
+                && !self.handle_key(key.code)
+            {
+                break;
             }
         }
         disable_raw_mode()?;
@@ -543,7 +543,7 @@ impl App {
         if !match &self.state.phase {
             GamePhase::Shop { items, .. } => items
                 .get(cursor)
-                .map_or(false, |it| self.state.gold >= it.price),
+                .is_some_and(|it| self.state.gold >= it.price),
             _ => false,
         } {
             return;
@@ -590,10 +590,11 @@ impl App {
                 _ => {
                     self.state.buy_shop_item(item);
                     // Clamp cursor if it's now past the end.
-                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase {
-                        if *cursor >= items.len() && !items.is_empty() {
-                            *cursor = items.len() - 1;
-                        }
+                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase
+                        && *cursor >= items.len()
+                        && !items.is_empty()
+                    {
+                        *cursor = items.len() - 1;
                     }
                 }
             }
