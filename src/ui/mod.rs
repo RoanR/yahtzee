@@ -186,8 +186,7 @@ impl App {
             } => (*score, *target, *success),
             _ => return,
         };
-
-        let loot_area = self.vertical_layout(frame, "Press any key to continue...");
+        let main_area = self.vertical_layout(frame, "Press any key to continue...");
 
         // Central loot area or HP loss
         let is_boss = self.state.dungeon.current_floor().boss_next();
@@ -209,14 +208,14 @@ impl App {
         frame.render_widget(
             Paragraph::new(Line::from(consequence).centered())
                 .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded)),
-            loot_area,
+            main_area,
         );
     }
 
     fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
         let main_area = self.vertical_layout(
             frame,
-            "[Up/Down] Select Category  [S/Enter] Confirm  [Q] Quit",
+            "[Up/Down] Select Category  [S/Enter] Confirm [R/Esc] To Roll [Q] Quit",
         );
 
         let [left_area, right_area] =
@@ -476,6 +475,10 @@ impl App {
             KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
                 let chosen = available[cursor].clone();
                 self.state.score_category(chosen);
+                true
+            }
+            KeyCode::Esc | KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.state.back_room();
                 true
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
