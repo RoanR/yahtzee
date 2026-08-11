@@ -170,6 +170,11 @@ impl GameState {
         };
     }
 
+    // Return to room (when scoring is aborted)
+    pub fn back_room(&mut self) {
+        self.phase = GamePhase::Rolling;
+    }
+
     // Score the current dice using an explicitly chosen category.
     // Applies enchant bonuses, compares against the room target.
     // Transitions phase to Scored.
