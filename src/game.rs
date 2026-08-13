@@ -189,7 +189,12 @@ impl GameState {
                 x.current = x.current.saturating_sub(score as u32);
                 ret
             }
-            None => self.dungeon.current_floor().boss.target.current,
+            None => {
+                let ret = self.dungeon.current_floor().boss.target.current;
+                self.dungeon.current_floor_mut().boss.target.current =
+                    ret.saturating_sub(score as u32);
+                ret
+            }
             Some(room::Room::Rest) => return,
         };
 
