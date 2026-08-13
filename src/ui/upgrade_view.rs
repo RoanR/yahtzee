@@ -49,7 +49,7 @@ impl Widget for UpgradeDiePrompt {
 //  [1] [2] [3] [4] [5] [6]
 //       ^-- cursor in cyan
 
-const FACE_W: u16 = 4;
+const FACE_W: u16 = 5;
 const FACE_H: u16 = 3;
 const FACE_GAP: u16 = 1;
 
@@ -102,7 +102,7 @@ impl Widget for FaceSelectView<'_> {
             if i == self.face_cursor {
                 block = block.style(Style::new().cyan());
             }
-            Paragraph::new(Line::from(format!("{:>1}", value_str)))
+            Paragraph::new(Line::from(format!("{:>2}", value_str)))
                 .block(block)
                 .render(Rect::new(x, faces_y, FACE_W, FACE_H), buf);
         }

@@ -292,6 +292,7 @@ impl DicePool {
         // Can't use toggle function as no garantee dice are in hold state
         for die in &mut self.dice {
             die.held = false;
+            die.selected = false;
         }
     }
 
