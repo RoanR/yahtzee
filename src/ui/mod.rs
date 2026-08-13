@@ -522,6 +522,7 @@ impl App {
 
         if success {
             self.state.earn_gold(reward_gold);
+            self.state.dice_pool.reset_for_room();
         } else {
             self.state.take_damage(10);
             if !matches!(self.state.phase, GamePhase::GameOver) {
