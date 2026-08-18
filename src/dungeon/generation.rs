@@ -24,12 +24,12 @@ use super::{
 // ─── Target scaling ───────────────────────────────────────────────────────────
 
 // Base score target for a given floor number (1-indexed).
-fn base_target(floor_num: usize) -> u32 {
-    (floor_num * 10) as u32
+fn base_target(floor_num: usize, room_num: usize) -> u32 {
+    ((floor_num * 10) + (floor_num * room_num)) as u32
 }
 
-fn challenge_target(floor_num: usize) -> ScoreTarget {
-    let target = base_target(floor_num);
+fn challenge_target(floor_num: usize, room_num: usize) -> ScoreTarget {
+    let target = base_target(floor_num, room_num);
     ScoreTarget {
         required: target,
         current: target,
@@ -37,8 +37,8 @@ fn challenge_target(floor_num: usize) -> ScoreTarget {
     }
 }
 
-fn elite_target(floor_num: usize) -> ScoreTarget {
-    let target = base_target(floor_num) * 3 / 2;
+fn elite_target(floor_num: usize, room_num: usize) -> ScoreTarget {
+    let target = base_target(floor_num, room_num) * 3 / 2;
     ScoreTarget {
         required: target,
         current: target,
@@ -47,7 +47,7 @@ fn elite_target(floor_num: usize) -> ScoreTarget {
 }
 
 fn boss_target(floor_num: usize) -> ScoreTarget {
-    let target = base_target(floor_num) * 2;
+    let target = base_target(floor_num, 5) * 2;
     ScoreTarget {
         required: target,
         current: target,
@@ -103,11 +103,11 @@ fn boss_for_floor(floor_num: usize) -> BossRoom {
 // ─── Room generation ──────────────────────────────────────────────────────────
 
 // Pick a single non-boss room type from the weighted pool.
-fn random_room(floor_num: usize, rng: &mut impl Rng) -> Room {
+fn random_room(floor_num: usize, room_num: usize, rng: &mut impl Rng) -> Room {
     match rng.random_range(0..100) {
-        55..75 => Room::Elite(elite_target(floor_num)),
+        55..75 => Room::Elite(elite_target(floor_num, room_num)),
         75..100 => Room::Rest,
-        _ => Room::Challenge(challenge_target(floor_num)),
+        _ => Room::Challenge(challenge_target(floor_num, room_num)),
     }
 }
 
@@ -115,8 +115,13 @@ fn random_room(floor_num: usize, rng: &mut impl Rng) -> Room {
 
 // Generate a complete floor: 3 pairs of room options + the floor's boss.
 pub fn generate_floor(floor_num: usize, rng: &mut impl Rng) -> Floor {
-    let room_choices = (0..3)
-        .map(|_| [random_room(floor_num, rng), random_room(floor_num, rng)])
+    let room_choices = (0..5)
+        .map(|room_num| {
+            [
+                random_room(floor_num, room_num, rng),
+                random_room(floor_num, room_num, rng),
+            ]
+        })
         .collect();
     let boss = boss_for_floor(floor_num);
     Floor {
