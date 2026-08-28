@@ -116,7 +116,10 @@ pub fn generate_shop_items(state: &GameState, rng: &mut impl Rng) -> Vec<ShopIte
     let mut items: Vec<ShopItem> = candidates
         .into_iter()
         .take(2)
-        .map(|r| ShopItem { kind: ShopItemKind::Relic(r), price: price(RELIC_BASE_PRICE) })
+        .map(|r| ShopItem {
+            kind: ShopItemKind::Relic(r),
+            price: price(RELIC_BASE_PRICE),
+        })
         .collect();
 
     // Offer a random special die only if a standard die exists to replace.
@@ -126,12 +129,18 @@ pub fn generate_shop_items(state: &GameState, rng: &mut impl Rng) -> Vec<ShopIte
             1 => SpecialDieKind::Cursed,
             _ => SpecialDieKind::Bones,
         };
-        items.push(ShopItem { kind: ShopItemKind::SpecialDie(kind), price: price(SPECIAL_DIE_BASE_PRICE) });
+        items.push(ShopItem {
+            kind: ShopItemKind::SpecialDie(kind),
+            price: price(SPECIAL_DIE_BASE_PRICE),
+        });
     }
 
     // HP potion only when player is missing HP.
     if state.hp < state.max_hp {
-        items.push(ShopItem { kind: ShopItemKind::HpPotion(HP_POTION_HEAL), price: price(HP_POTION_BASE_PRICE) });
+        items.push(ShopItem {
+            kind: ShopItemKind::HpPotion(HP_POTION_HEAL),
+            price: price(HP_POTION_BASE_PRICE),
+        });
     }
 
     // One die upgrade: randomly Augment or Enchant.
@@ -140,7 +149,10 @@ pub fn generate_shop_items(state: &GameState, rng: &mut impl Rng) -> Vec<ShopIte
     } else {
         UpgradeKind::Enchant
     };
-    items.push(ShopItem { kind: ShopItemKind::DieUpgrade(upgrade_kind), price: price(DIE_UPGRADE_BASE_PRICE) });
+    items.push(ShopItem {
+        kind: ShopItemKind::DieUpgrade(upgrade_kind),
+        price: price(DIE_UPGRADE_BASE_PRICE),
+    });
 
     items
 }
