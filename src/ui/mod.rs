@@ -14,9 +14,11 @@ pub mod dungeon_view;
 pub mod game_over;
 pub mod rest;
 pub mod roll_animation;
+pub mod rolling;
 pub mod room_select;
 pub mod score_view;
 pub mod scored;
+pub mod selecting;
 pub mod shop;
 pub mod unlock;
 pub mod upgrade;
@@ -128,65 +130,6 @@ impl App {
         }
     }
 
-    // Main game screen
-    //   [main]    Min(0)     horizontal split:
-    //     [left]  Fill(2)    DiceView (die boxes + rolls indicator below)
-    //     [right] Fill(3)    ScoreView (title + category list)
-    // The Fill(2)/Fill(3) ratio gives the left panel ~40% and the right ~60% of
-    // the width. On an 80-col terminal the left gets ~32 cols (enough for 5 dice
-    // at 5 chars each) and the right gets ~48 cols (enough for long category names).
-    fn render_game(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint());
-
-        // Inner horizontal split inside main_area.
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
-                .areas(main_area);
-
-        // Render DiceView (die boxes + rolls indicator) into left_area.
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-
-        // Render ScoreView (title + categories) into right_area.
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            ),
-            right_area,
-        );
-    }
-
-    fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select Category  [S/Enter] Confirm [R/Esc] To Roll [Q] Quit",
-        );
-
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
-
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            )
-            .with_cursor(cursor),
-            right_area,
-        );
-    }
-
     // Used for shop and rest sites
     fn render_rest_shop(&self, frame: &mut ratatui::Frame, widget: impl Widget) {
         let main_area = self.vertical_layout(
@@ -246,99 +189,6 @@ impl App {
         }
     }
 
-    fn handle_rolling(&mut self, code: KeyCode) -> bool {
-        match (
-            self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining,
-            code,
-        ) {
-            (true, KeyCode::Right) => {
-                self.state.dice_pool.next_die();
-                true
-            }
-            (true, KeyCode::Left) => {
-                self.state.dice_pool.prev_die();
-                true
-            }
-            (true, KeyCode::Char(' ')) => {
-                self.state.dice_pool.toggle_selected();
-                true
-            }
-            (_, KeyCode::Char('r') | KeyCode::Char('R')) => {
-                if self.state.roll() {
-                    // Roll committed; start display animation.
-                    self.roll_animation =
-                        Some(RollAnimation::new(&self.state.dice_pool, &mut self.rng));
-                }
-                true
-            }
-            (true, KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter) => {
-                self.state.begin_scoring();
-                true
-            }
-            (_, KeyCode::Char('q') | KeyCode::Char('Q')) => false,
-            _ => true,
-        }
-    }
-
-    fn handle_selecting(&mut self, code: KeyCode, cursor: usize) -> bool {
-        let from_boss = match self.state.phase {
-            GamePhase::SelectingCategory { from_boss, .. } => from_boss,
-            _ => false,
-        };
-
-        let available: Vec<ScoreCategory> = self
-            .state
-            .unlocked
-            .iter()
-            .filter(|c| !self.state.used_this_room.contains(c))
-            .cloned()
-            .collect();
-
-        if available.is_empty() {
-            return true;
-        }
-
-        let cursor = cursor.min(available.len() - 1);
-
-        match code {
-            KeyCode::Up => {
-                let new_cursor = if cursor == 0 {
-                    available.len() - 1
-                } else {
-                    cursor - 1
-                };
-                self.state.phase = GamePhase::SelectingCategory {
-                    cursor: new_cursor,
-                    from_boss,
-                };
-                true
-            }
-            KeyCode::Down => {
-                let new_cursor = if cursor + 1 >= available.len() {
-                    0
-                } else {
-                    cursor + 1
-                };
-                self.state.phase = GamePhase::SelectingCategory {
-                    cursor: new_cursor,
-                    from_boss,
-                };
-                true
-            }
-            KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
-                let chosen = available[cursor].clone();
-                self.state.score_category(chosen);
-                true
-            }
-            KeyCode::Esc | KeyCode::Char('r') | KeyCode::Char('R') => {
-                self.state.back_room();
-                true
-            }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => true,
-        }
-    }
-
     fn handle_rest_shop(
         &mut self,
         code: KeyCode,
@@ -371,12 +221,21 @@ impl App {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fn roll_hint(&self) -> &'static str {
-        if self.state.dice_pool.rolls_remaining == self.state.dice_pool.max_rolls {
-            "[R] Roll  [Q] Quit"
-        } else {
-            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
+    // Shared by rolling.rs (Rolling/Boss) and selecting.rs (SelectingCategory),
+    // which both show the dice pool but pick a different score-view mode.
+    fn dice_widget(&self) -> dice_view::DiceView<'_> {
+        match &self.roll_animation {
+            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
+            None => dice_view::DiceView::new(&self.state.dice_pool),
         }
+    }
+
+    fn score_view_widget(&self) -> score_view::ScoreView<'_> {
+        score_view::ScoreView::new(
+            &self.state.dice_pool,
+            &self.state.unlocked,
+            &self.state.used_this_room,
+        )
     }
 
     // Advance the roll animation by one tick (called once per render loop iteration).
