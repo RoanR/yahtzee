@@ -12,9 +12,9 @@
 pub mod dice_view;
 pub mod dungeon_view;
 pub mod game_over;
-pub mod path_view;
 pub mod rest_view;
 pub mod roll_animation;
+pub mod room_select;
 pub mod score_view;
 pub mod scored;
 pub mod shop_view;
@@ -38,7 +38,6 @@ use ratatui::{
 
 use crate::{
     dice::{Die, DieUpgrade},
-    dungeon::room,
     game::{GamePhase, GameState, UpgradeKind},
     scoring::ScoreCategory,
     shop,
@@ -255,12 +254,6 @@ impl App {
             ),
             main_area,
         );
-    }
-
-    fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let content_area =
-            self.vertical_layout(frame, "[Left/Right] Choose  [Enter] Confirm  [Q] Quit");
-        frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
     }
 
     // ── Input ─────────────────────────────────────────────────────────────────
@@ -632,30 +625,6 @@ impl App {
                     kind,
                     from_shop,
                     pending_die: None,
-                };
-                true
-            }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => true,
-        }
-    }
-
-    fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
-        match code {
-            KeyCode::Left | KeyCode::Up => {
-                self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
-                true
-            }
-            KeyCode::Right | KeyCode::Down => {
-                self.state.phase = GamePhase::ChoosingRoom { cursor: 1 };
-                true
-            }
-            KeyCode::Enter => {
-                self.state.dungeon.current_floor_mut().choose(cursor);
-                self.state.begin_room(true);
-                self.state.phase = match self.state.dungeon.current_floor().current_room() {
-                    Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
-                    _ => GamePhase::Rolling,
                 };
                 true
             }
