@@ -13,6 +13,7 @@ pub mod dice_view;
 pub mod dungeon_view;
 pub mod path_view;
 pub mod rest_view;
+pub mod roll_animation;
 pub mod score_view;
 pub mod shop_view;
 pub mod upgrade_view;
@@ -41,17 +42,7 @@ use crate::{
     shop,
 };
 
-// ─── RollAnimation ────────────────────────────────────────────────────────────
-
-// 18 ticks * 16ms ~= 288ms of visible cycling before snapping to the real result.
-const ROLL_ANIM_FRAMES: u8 = 18;
-
-struct RollAnimation {
-    frames_remaining: u8,
-    // Per-die value to display this frame. None = held die (show actual current_value).
-    // Always 1-6; no WILD sentinel during animation.
-    display: Vec<Option<u8>>,
-}
+use roll_animation::RollAnimation;
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
@@ -398,23 +389,8 @@ impl App {
             (_, KeyCode::Char('r') | KeyCode::Char('R')) => {
                 if self.state.roll() {
                     // Roll committed; start display animation.
-                    // Collect held flags before borrowing rng.
-                    let held: Vec<bool> =
-                        self.state.dice_pool.dice.iter().map(|d| d.held).collect();
-                    let display = held
-                        .iter()
-                        .map(|&h| {
-                            if h {
-                                None
-                            } else {
-                                Some(self.rng.random_range(1u8..=6))
-                            }
-                        })
-                        .collect();
-                    self.roll_animation = Some(RollAnimation {
-                        frames_remaining: ROLL_ANIM_FRAMES,
-                        display,
-                    });
+                    self.roll_animation =
+                        Some(RollAnimation::new(&self.state.dice_pool, &mut self.rng));
                 }
                 true
             }
@@ -846,36 +822,13 @@ impl App {
     // Advance the roll animation by one tick (called once per render loop iteration).
     // When the frame count reaches zero, clears the animation so real values render.
     fn tick_animation(&mut self) {
-        // Decrement and check completion; borrow of roll_animation ends after this block.
-        let is_active = match self.roll_animation.as_mut() {
+        let still_active = match self.roll_animation.as_mut() {
             None => return,
-            Some(anim) => {
-                anim.frames_remaining -= 1;
-                anim.frames_remaining > 0
-            }
+            Some(anim) => anim.tick(&self.state.dice_pool, &mut self.rng),
         };
 
-        if !is_active {
+        if !still_active {
             self.roll_animation = None;
-            return;
-        }
-
-        // Build fresh random display values. Collect held flags first so the
-        // borrow on dice_pool ends before we borrow rng.
-        let held: Vec<bool> = self.state.dice_pool.dice.iter().map(|d| d.held).collect();
-        let new_display: Vec<Option<u8>> = held
-            .iter()
-            .map(|&h| {
-                if h {
-                    None
-                } else {
-                    Some(self.rng.random_range(1u8..=6))
-                }
-            })
-            .collect();
-
-        if let Some(anim) = self.roll_animation.as_mut() {
-            anim.display = new_display;
         }
     }
 
