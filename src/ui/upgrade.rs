@@ -21,7 +21,7 @@ use crate::{
     game::{GamePhase, UpgradeKind},
 };
 
-use super::{App, dice_view};
+use super::{App, dice_view, is_quit};
 
 // ─── UpgradeDiePrompt ─────────────────────────────────────────────────────────
 
@@ -177,6 +177,9 @@ impl App {
         from_shop: bool,
         pending_die: Option<Die>,
     ) -> bool {
+        if is_quit(code) {
+            return false;
+        }
         let pool_len = self.state.dice_pool.dice.len();
         match code {
             KeyCode::Left => {
@@ -206,7 +209,6 @@ impl App {
                 self.state.phase = GamePhase::Rest { cursor: 0 };
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
     }
@@ -219,6 +221,9 @@ impl App {
         kind: UpgradeKind,
         from_shop: bool,
     ) -> bool {
+        if is_quit(code) {
+            return false;
+        }
         let faces_len = self.state.dice_pool.dice[die_index].faces().len();
         match code {
             KeyCode::Left => {
@@ -259,7 +264,6 @@ impl App {
                 };
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
     }

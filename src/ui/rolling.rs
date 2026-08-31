@@ -10,7 +10,7 @@
 use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout};
 
-use super::{App, roll_animation::RollAnimation};
+use super::{App, is_quit, roll_animation::RollAnimation};
 
 impl App {
     pub(super) fn render_game(&self, frame: &mut ratatui::Frame) {
@@ -25,6 +25,9 @@ impl App {
     }
 
     pub(super) fn handle_rolling(&mut self, code: KeyCode) -> bool {
+        if is_quit(code) {
+            return false;
+        }
         match (
             self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining,
             code,
@@ -53,7 +56,6 @@ impl App {
                 self.state.begin_scoring();
                 true
             }
-            (_, KeyCode::Char('q') | KeyCode::Char('Q')) => false,
             _ => true,
         }
     }

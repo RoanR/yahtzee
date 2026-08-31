@@ -6,7 +6,7 @@ use ratatui::layout::{Constraint, Layout};
 
 use crate::{game::GamePhase, scoring::ScoreCategory};
 
-use super::App;
+use super::{App, is_quit};
 
 impl App {
     pub(super) fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
@@ -38,6 +38,10 @@ impl App {
 
         if available.is_empty() {
             return true;
+        }
+
+        if is_quit(code) {
+            return false;
         }
 
         let cursor = cursor.min(available.len() - 1);
@@ -76,7 +80,6 @@ impl App {
                 self.state.back_room();
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
     }

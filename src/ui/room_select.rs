@@ -18,7 +18,7 @@ use crate::{
     game::{GamePhase, GameState},
 };
 
-use super::App;
+use super::{App, is_quit};
 
 pub struct PathView<'a> {
     state: &'a GameState,
@@ -110,6 +110,9 @@ impl App {
     }
 
     pub(super) fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
+        if is_quit(code) {
+            return false;
+        }
         match code {
             KeyCode::Left | KeyCode::Up => {
                 self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
@@ -128,7 +131,6 @@ impl App {
                 };
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
     }

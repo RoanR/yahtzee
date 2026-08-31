@@ -5,9 +5,13 @@
 //   2. Polls for a crossterm event.
 //   3. Dispatches the event to the appropriate input handler.
 //
-// All rendering is done through ratatui widgets defined in the sibling modules.
-// Input handling is done in App methods; they mutate GameState and let the
-// next render reflect the new state.
+// Each GamePhase's render_*/handle_* methods live together in one sibling
+// module (e.g. rolling.rs, shop.rs, upgrade.rs) as extra `impl App` blocks,
+// alongside that phase's widget if it has one. This file holds only what's
+// genuinely shared: the App struct itself, the run loop, render()/handle_key()
+// dispatch, roll-animation ticking, and small helpers (dice_widget,
+// score_view_widget, vertical_layout, is_quit, render_rest_shop/
+// handle_rest_shop, transition_after_advance) used by two or more phases.
 
 pub mod dice_view;
 pub mod dungeon_view;
@@ -44,6 +48,11 @@ use crate::{
 };
 
 use roll_animation::RollAnimation;
+
+// Shared by every phase's input handler to quit on 'q'/'Q'.
+fn is_quit(code: KeyCode) -> bool {
+    matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'))
+}
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
@@ -145,7 +154,7 @@ impl App {
     fn handle_key(&mut self, code: KeyCode) -> bool {
         // During a roll animation only Q is processed; everything else is ignored.
         if self.roll_animation.is_some() {
-            return !matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'));
+            return !is_quit(code);
         }
         match &self.state.phase {
             GamePhase::Rolling => self.handle_rolling(code),
@@ -196,6 +205,9 @@ impl App {
         len: usize,
         enter: fn(&mut App, usize),
     ) -> bool {
+        if is_quit(code) {
+            return false;
+        }
         match code {
             KeyCode::Up if len > 0 => {
                 self.state.phase.set_cursor((cursor + len - 1) % len);
@@ -214,7 +226,6 @@ impl App {
                 enter(self, cursor);
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
     }
