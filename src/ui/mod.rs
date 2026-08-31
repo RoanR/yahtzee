@@ -11,11 +11,13 @@
 
 pub mod dice_view;
 pub mod dungeon_view;
+pub mod game_over;
 pub mod path_view;
 pub mod rest_view;
 pub mod roll_animation;
 pub mod score_view;
 pub mod shop_view;
+pub mod unlock;
 pub mod upgrade_view;
 
 use std::time::Duration;
@@ -25,7 +27,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
+use rand::rngs::ThreadRng;
 use ratatui::{
     Terminal, Viewport,
     backend::CrosstermBackend,
@@ -288,28 +290,6 @@ impl App {
                 kind,
             ),
             main_area,
-        );
-    }
-
-    fn render_unlock(&self, frame: &mut ratatui::Frame) {
-        let text = match &self.unlock_options {
-            Some(options) => format!(
-                "BOSS DEFEATED! Choose a new scoring category:\n\n[1] {}\n[2] {}",
-                options[0], options[1]
-            ),
-            None => "All categories unlocked! Press any key to continue.".to_string(),
-        };
-        frame.render_widget(Paragraph::new(text), frame.area());
-    }
-
-    fn render_game_over(&self, frame: &mut ratatui::Frame) {
-        let floor = self.state.dungeon.current_floor();
-        frame.render_widget(
-            Paragraph::new(format!(
-                "GAME OVER\n\nFloor {}\nHP: {}/{}\n\n[Q] or [Enter] to quit",
-                floor.floor_num, self.state.hp, self.state.max_hp
-            )),
-            frame.area(),
         );
     }
 
@@ -752,30 +732,6 @@ impl App {
         }
     }
 
-    fn handle_unlock(&mut self, code: KeyCode) -> bool {
-        if self.unlock_options.is_none() {
-            // All categories already unlocked: any key descends.
-            self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
-            return true;
-        }
-
-        let chosen = match (code, &self.unlock_options) {
-            (KeyCode::Char('1'), Some(opts)) => Some(opts[0].clone()),
-            (KeyCode::Char('2'), Some(opts)) => Some(opts[1].clone()),
-            _ => return true,
-        };
-
-        if let Some(cat) = chosen {
-            self.state.unlock_category(cat);
-            self.unlock_options = None;
-            self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
-        }
-
-        true
-    }
-
     fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
         match code {
             KeyCode::Left | KeyCode::Up => {
@@ -798,15 +754,6 @@ impl App {
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
-    }
-
-    fn handle_game_over(&mut self, code: KeyCode) -> bool {
-        matches!(
-            code,
-            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Enter
-        )
-        .then(|| false)
-        .unwrap_or(true)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -840,36 +787,6 @@ impl App {
         } else {
             self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
         }
-    }
-
-    // Pick two unique categories from those not yet unlocked. Returns None when
-    // fewer than two remain (all categories have been unlocked).
-    fn pick_unlock_options(&mut self) -> Option<[ScoreCategory; 2]> {
-        const ALL_UNLOCKABLE: &[ScoreCategory] = &[
-            ScoreCategory::Ones,
-            ScoreCategory::Twos,
-            ScoreCategory::Threes,
-            ScoreCategory::Fours,
-            ScoreCategory::Fives,
-            ScoreCategory::Sixes,
-            ScoreCategory::FullHouse,
-            ScoreCategory::SmallStraight,
-            ScoreCategory::LargeStraight,
-            ScoreCategory::Yahtzee,
-        ];
-
-        let available: Vec<ScoreCategory> = ALL_UNLOCKABLE
-            .iter()
-            .filter(|c| !self.state.unlocked.contains(c))
-            .cloned()
-            .collect();
-
-        if available.len() < 2 {
-            return None;
-        }
-
-        let chosen: Vec<&ScoreCategory> = available.choose_multiple(&mut self.rng, 2).collect();
-        Some([chosen[0].clone(), chosen[1].clone()])
     }
 
     fn vertical_layout(&self, frame: &mut ratatui::Frame, hints: &str) -> Rect {
