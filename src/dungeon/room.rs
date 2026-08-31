@@ -60,4 +60,11 @@ impl Room {
             Room::Rest => "R".to_string(),
         }
     }
+
+    pub fn reward_gold(&self) -> u32 {
+        match self {
+            Room::Challenge(t) | Room::Elite(t) => t.reward_gold,
+            Room::Rest => 0,
+        }
+    }
 }
