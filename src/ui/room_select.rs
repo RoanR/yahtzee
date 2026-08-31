@@ -39,11 +39,8 @@ impl Widget for PathView<'_> {
             None => return,
         };
 
-        let [title_area, panels_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Fill(1),
-        ])
-        .areas(area);
+        let [title_area, panels_area] =
+            Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(area);
 
         Paragraph::new("CHOOSE YOUR PATH")
             .centered()
@@ -85,10 +82,7 @@ fn render_room_panel(room: &Room, selected: bool, area: Rect, buf: &mut Buffer) 
         ),
         Room::Rest => (
             "REST SITE",
-            vec![
-                Line::from("Heal 15 HP"),
-                Line::from("Upgrade a die"),
-            ],
+            vec![Line::from("Heal 15 HP"), Line::from("Upgrade a die")],
         ),
     };
 

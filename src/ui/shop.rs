@@ -88,7 +88,12 @@ impl Widget for ShopView<'_> {
 }
 
 impl App {
-    pub(super) fn render_shop(&self, frame: &mut ratatui::Frame, items: &[ShopItem], cursor: usize) {
+    pub(super) fn render_shop(
+        &self,
+        frame: &mut ratatui::Frame,
+        items: &[ShopItem],
+        cursor: usize,
+    ) {
         self.render_rest_shop(frame, ShopView::new(items, self.state.gold, cursor));
     }
 
