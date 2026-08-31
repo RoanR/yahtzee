@@ -12,12 +12,12 @@
 pub mod dice_view;
 pub mod dungeon_view;
 pub mod game_over;
-pub mod rest_view;
+pub mod rest;
 pub mod roll_animation;
 pub mod room_select;
 pub mod score_view;
 pub mod scored;
-pub mod shop_view;
+pub mod shop;
 pub mod unlock;
 pub mod upgrade_view;
 
@@ -40,7 +40,6 @@ use crate::{
     dice::{Die, DieUpgrade},
     game::{GamePhase, GameState, UpgradeKind},
     scoring::ScoreCategory,
-    shop,
 };
 
 use roll_animation::RollAnimation;
@@ -57,7 +56,7 @@ pub struct App {
     unlock_options: Option<[ScoreCategory; 2]>,
     roll_animation: Option<RollAnimation>,
     // Shop items held aside while the player picks a die/face for an upgrade purchased in shop.
-    stashed_shop: Option<(Vec<shop::ShopItem>, usize)>,
+    stashed_shop: Option<(Vec<crate::shop::ShopItem>, usize)>,
 }
 
 impl App {
@@ -110,13 +109,8 @@ impl App {
             GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_game(frame),
-            GamePhase::Shop { items, cursor } => self.render_rest_shop(
-                frame,
-                shop_view::ShopView::new(items, self.state.gold, *cursor),
-            ),
-            GamePhase::Rest { cursor } => {
-                self.render_rest_shop(frame, rest_view::RestView::new(*cursor))
-            }
+            GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
+            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
@@ -396,95 +390,6 @@ impl App {
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
-        }
-    }
-
-    fn handle_shop(&mut self, cursor: usize) {
-        // Only proceed if the player can afford the selected item.
-        if !match &self.state.phase {
-            GamePhase::Shop { items, .. } => items
-                .get(cursor)
-                .is_some_and(|it| self.state.gold >= it.price),
-            _ => false,
-        } {
-            return;
-        }
-
-        // Remove the item from the available list
-        let item = match &mut self.state.phase {
-            GamePhase::Shop { items, .. } if cursor < items.len() => Some(items.remove(cursor)),
-            _ => None,
-        };
-
-        //
-        if let Some(item) = item {
-            match item.kind {
-                shop::ShopItemKind::DieUpgrade(kind) => {
-                    self.state.spend_gold(item.price);
-                    // Extract remaining shop state and stash it while the player
-                    // picks which die and face to upgrade.
-                    let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
-                    if let GamePhase::Shop { items, cursor } = old {
-                        self.stashed_shop = Some((items, cursor));
-                    }
-                    self.state.phase = GamePhase::UpgradeSelectDie {
-                        die_cursor: 0,
-                        kind,
-                        from_shop: true,
-                        pending_die: None,
-                    };
-                }
-                shop::ShopItemKind::SpecialDie(kind) => {
-                    self.state.spend_gold(item.price);
-                    let pending_die = Some(kind.create_die());
-                    let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
-                    if let GamePhase::Shop { items, cursor } = old {
-                        self.stashed_shop = Some((items, cursor));
-                    }
-                    self.state.phase = GamePhase::UpgradeSelectDie {
-                        die_cursor: 0,
-                        kind: UpgradeKind::Augment,
-                        from_shop: true,
-                        pending_die,
-                    };
-                }
-                _ => {
-                    self.state.buy_shop_item(item);
-                    // Clamp cursor if it's now past the end.
-                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase
-                        && *cursor >= items.len()
-                        && !items.is_empty()
-                    {
-                        *cursor = items.len() - 1;
-                    }
-                }
-            }
-        }
-    }
-
-    fn handle_rest(&mut self, cursor: usize) {
-        match cursor {
-            0 => {
-                self.state.heal(15);
-                self.state.dungeon.current_floor_mut().advance();
-                self.transition_after_advance();
-            }
-            1 => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Augment,
-                    from_shop: false,
-                    pending_die: None,
-                };
-            }
-            _ => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Enchant,
-                    from_shop: false,
-                    pending_die: None,
-                };
-            }
         }
     }
 
