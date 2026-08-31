@@ -4,6 +4,7 @@
 //   Row 0-1: title "CHOOSE YOUR PATH" centered
 //   Rows 2..end: two room panels side by side
 
+use crossterm::event::KeyCode;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -12,7 +13,12 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
-use crate::{dungeon::room::Room, game::GameState};
+use crate::{
+    dungeon::room::Room,
+    game::{GamePhase, GameState},
+};
+
+use super::{App, is_quit};
 
 pub struct PathView<'a> {
     state: &'a GameState,
@@ -33,11 +39,8 @@ impl Widget for PathView<'_> {
             None => return,
         };
 
-        let [title_area, panels_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Fill(1),
-        ])
-        .areas(area);
+        let [title_area, panels_area] =
+            Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(area);
 
         Paragraph::new("CHOOSE YOUR PATH")
             .centered()
@@ -79,10 +82,7 @@ fn render_room_panel(room: &Room, selected: bool, area: Rect, buf: &mut Buffer) 
         ),
         Room::Rest => (
             "REST SITE",
-            vec![
-                Line::from("Heal 15 HP"),
-                Line::from("Upgrade a die"),
-            ],
+            vec![Line::from("Heal 15 HP"), Line::from("Upgrade a die")],
         ),
     };
 
@@ -94,4 +94,38 @@ fn render_room_panel(room: &Room, selected: bool, area: Rect, buf: &mut Buffer) 
     let inner = block.inner(area);
     block.render(area, buf);
     Paragraph::new(lines).render(inner, buf);
+}
+
+impl App {
+    pub(super) fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
+        let content_area =
+            self.vertical_layout(frame, "[Left/Right] Choose  [Enter] Confirm  [Q] Quit");
+        frame.render_widget(PathView::new(&self.state, cursor), content_area);
+    }
+
+    pub(super) fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
+        if is_quit(code) {
+            return false;
+        }
+        match code {
+            KeyCode::Left | KeyCode::Up => {
+                self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
+                true
+            }
+            KeyCode::Right | KeyCode::Down => {
+                self.state.phase = GamePhase::ChoosingRoom { cursor: 1 };
+                true
+            }
+            KeyCode::Enter => {
+                self.state.dungeon.current_floor_mut().choose(cursor);
+                self.state.begin_room(true);
+                self.state.phase = match self.state.dungeon.current_floor().current_room() {
+                    Some(Room::Rest) => GamePhase::Rest { cursor: 0 },
+                    _ => GamePhase::Rolling,
+                };
+                true
+            }
+            _ => true,
+        }
+    }
 }

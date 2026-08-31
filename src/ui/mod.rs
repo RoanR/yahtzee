@@ -5,17 +5,27 @@
 //   2. Polls for a crossterm event.
 //   3. Dispatches the event to the appropriate input handler.
 //
-// All rendering is done through ratatui widgets defined in the sibling modules.
-// Input handling is done in App methods; they mutate GameState and let the
-// next render reflect the new state.
+// Each GamePhase's render_*/handle_* methods live together in one sibling
+// module (e.g. rolling.rs, shop.rs, upgrade.rs) as extra `impl App` blocks,
+// alongside that phase's widget if it has one. This file holds only what's
+// genuinely shared: the App struct itself, the run loop, render()/handle_key()
+// dispatch, roll-animation ticking, and small helpers (dice_widget,
+// score_view_widget, vertical_layout, is_quit, render_rest_shop/
+// handle_rest_shop, transition_after_advance) used by two or more phases.
 
 pub mod dice_view;
 pub mod dungeon_view;
-pub mod path_view;
-pub mod rest_view;
+pub mod game_over;
+pub mod rest;
+pub mod roll_animation;
+pub mod rolling;
+pub mod room_select;
 pub mod score_view;
-pub mod shop_view;
-pub mod upgrade_view;
+pub mod scored;
+pub mod selecting;
+pub mod shop;
+pub mod unlock;
+pub mod upgrade;
 
 use std::time::Duration;
 
@@ -24,33 +34,24 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
+use rand::rngs::ThreadRng;
 use ratatui::{
     Terminal, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
-    text::Line,
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Paragraph, Widget},
 };
 
 use crate::{
-    dice::{Die, DieUpgrade},
-    dungeon::room,
-    game::{GamePhase, GameState, UpgradeKind},
+    game::{GamePhase, GameState},
     scoring::ScoreCategory,
-    shop,
 };
 
-// ─── RollAnimation ────────────────────────────────────────────────────────────
+use roll_animation::RollAnimation;
 
-// 18 ticks * 16ms ~= 288ms of visible cycling before snapping to the real result.
-const ROLL_ANIM_FRAMES: u8 = 18;
-
-struct RollAnimation {
-    frames_remaining: u8,
-    // Per-die value to display this frame. None = held die (show actual current_value).
-    // Always 1-6; no WILD sentinel during animation.
-    display: Vec<Option<u8>>,
+// Shared by every phase's input handler to quit on 'q'/'Q'.
+fn is_quit(code: KeyCode) -> bool {
+    matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'))
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ pub struct App {
     unlock_options: Option<[ScoreCategory; 2]>,
     roll_animation: Option<RollAnimation>,
     // Shop items held aside while the player picks a die/face for an upgrade purchased in shop.
-    stashed_shop: Option<(Vec<shop::ShopItem>, usize)>,
+    stashed_shop: Option<(Vec<crate::shop::ShopItem>, usize)>,
 }
 
 impl App {
@@ -118,13 +119,8 @@ impl App {
             GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
             GamePhase::Scored { .. } => self.render_scored(frame),
             GamePhase::Boss => self.render_game(frame),
-            GamePhase::Shop { items, cursor } => self.render_rest_shop(
-                frame,
-                shop_view::ShopView::new(items, self.state.gold, *cursor),
-            ),
-            GamePhase::Rest { cursor } => {
-                self.render_rest_shop(frame, rest_view::RestView::new(*cursor))
-            }
+            GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
+            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
@@ -143,101 +139,6 @@ impl App {
         }
     }
 
-    // Main game screen
-    //   [main]    Min(0)     horizontal split:
-    //     [left]  Fill(2)    DiceView (die boxes + rolls indicator below)
-    //     [right] Fill(3)    ScoreView (title + category list)
-    // The Fill(2)/Fill(3) ratio gives the left panel ~40% and the right ~60% of
-    // the width. On an 80-col terminal the left gets ~32 cols (enough for 5 dice
-    // at 5 chars each) and the right gets ~48 cols (enough for long category names).
-    fn render_game(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint());
-
-        // Inner horizontal split inside main_area.
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
-                .areas(main_area);
-
-        // Render DiceView (die boxes + rolls indicator) into left_area.
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-
-        // Render ScoreView (title + categories) into right_area.
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            ),
-            right_area,
-        );
-    }
-
-    // Scored result screen: shown after player scores, before advancing to next room.
-    fn render_scored(&self, frame: &mut ratatui::Frame) {
-        let (_score, _target, success) = match &self.state.phase {
-            GamePhase::Scored {
-                score,
-                target,
-                success,
-            } => (*score, *target, *success),
-            _ => return,
-        };
-        let main_area = self.vertical_layout(frame, "Press any key to continue...");
-
-        // Central loot area or HP loss
-        let is_boss = self.state.dungeon.current_floor().boss_next();
-        let consequence = if success {
-            if is_boss {
-                "\nBoss defeated! Choose a new category.".to_string()
-            } else {
-                let gold = match self.state.dungeon.current_floor().current_room() {
-                    Some(room::Room::Challenge(t)) => t.reward_gold,
-                    Some(room::Room::Elite(t)) => t.reward_gold,
-                    _ => 0,
-                };
-                format!("\n+{}g earned", gold)
-            }
-        } else {
-            let hp_loss = if is_boss { 20 } else { 10 };
-            format!("\n-{} HP", hp_loss)
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(consequence).centered())
-                .block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded)),
-            main_area,
-        );
-    }
-
-    fn render_selecting(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Up/Down] Select Category  [S/Enter] Confirm [R/Esc] To Roll [Q] Quit",
-        );
-
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Fill(2), Constraint::Fill(3)]).areas(main_area);
-
-        let dice_widget = match &self.roll_animation {
-            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
-            None => dice_view::DiceView::new(&self.state.dice_pool),
-        };
-        frame.render_widget(dice_widget, left_area);
-
-        frame.render_widget(
-            score_view::ScoreView::new(
-                &self.state.dice_pool,
-                &self.state.unlocked,
-                &self.state.used_this_room,
-            )
-            .with_cursor(cursor),
-            right_area,
-        );
-    }
-
     // Used for shop and rest sites
     fn render_rest_shop(&self, frame: &mut ratatui::Frame, widget: impl Widget) {
         let main_area = self.vertical_layout(
@@ -247,94 +148,13 @@ impl App {
         frame.render_widget(widget, main_area);
     }
 
-    fn render_upgrade_select_die(
-        &self,
-        frame: &mut ratatui::Frame,
-        die_cursor: usize,
-        kind: UpgradeKind,
-        pending_die: Option<&Die>,
-    ) {
-        let hint = if pending_die.is_some() {
-            "[Left/Right] Select  [Enter] Replace  [Q] Quit"
-        } else {
-            "[Left/Right] Select  [Enter] Confirm  [Esc] Back  [Q] Quit"
-        };
-        let main_area = self.vertical_layout(frame, hint);
-        let [left_area, right_area] =
-            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
-                .areas(main_area);
-
-        frame.render_widget(
-            dice_view::DiceView::with_upgrade_cursor(&self.state.dice_pool, die_cursor),
-            left_area,
-        );
-        if let Some(die) = pending_die {
-            frame.render_widget(
-                Paragraph::new(format!("Replacing with\n{}", die.label())),
-                right_area,
-            );
-        } else {
-            frame.render_widget(upgrade_view::UpgradeDiePrompt::new(kind), right_area);
-        }
-    }
-
-    fn render_upgrade_select_face(
-        &self,
-        frame: &mut ratatui::Frame,
-        die_index: usize,
-        face_cursor: usize,
-        kind: UpgradeKind,
-    ) {
-        let main_area = self.vertical_layout(
-            frame,
-            "[Left/Right] Select  [Enter] Upgrade  [Esc] Back  [Q] Quit",
-        );
-        frame.render_widget(
-            upgrade_view::FaceSelectView::new(
-                &self.state.dice_pool.dice[die_index],
-                die_index,
-                face_cursor,
-                kind,
-            ),
-            main_area,
-        );
-    }
-
-    fn render_unlock(&self, frame: &mut ratatui::Frame) {
-        let text = match &self.unlock_options {
-            Some(options) => format!(
-                "BOSS DEFEATED! Choose a new scoring category:\n\n[1] {}\n[2] {}",
-                options[0], options[1]
-            ),
-            None => "All categories unlocked! Press any key to continue.".to_string(),
-        };
-        frame.render_widget(Paragraph::new(text), frame.area());
-    }
-
-    fn render_game_over(&self, frame: &mut ratatui::Frame) {
-        let floor = self.state.dungeon.current_floor();
-        frame.render_widget(
-            Paragraph::new(format!(
-                "GAME OVER\n\nFloor {}\nHP: {}/{}\n\n[Q] or [Enter] to quit",
-                floor.floor_num, self.state.hp, self.state.max_hp
-            )),
-            frame.area(),
-        );
-    }
-
-    fn render_choosing_room(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        let content_area =
-            self.vertical_layout(frame, "[Left/Right] Choose  [Enter] Confirm  [Q] Quit");
-        frame.render_widget(path_view::PathView::new(&self.state, cursor), content_area);
-    }
-
     // ── Input ─────────────────────────────────────────────────────────────────
 
     // Handle a key press. Returns false to signal the event loop to exit.
     fn handle_key(&mut self, code: KeyCode) -> bool {
         // During a roll animation only Q is processed; everything else is ignored.
         if self.roll_animation.is_some() {
-            return !matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'));
+            return !is_quit(code);
         }
         match &self.state.phase {
             GamePhase::Rolling => self.handle_rolling(code),
@@ -378,259 +198,6 @@ impl App {
         }
     }
 
-    fn handle_rolling(&mut self, code: KeyCode) -> bool {
-        match (
-            self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining,
-            code,
-        ) {
-            (true, KeyCode::Right) => {
-                self.state.dice_pool.next_die();
-                true
-            }
-            (true, KeyCode::Left) => {
-                self.state.dice_pool.prev_die();
-                true
-            }
-            (true, KeyCode::Char(' ')) => {
-                self.state.dice_pool.toggle_selected();
-                true
-            }
-            (_, KeyCode::Char('r') | KeyCode::Char('R')) => {
-                if self.state.roll() {
-                    // Roll committed; start display animation.
-                    // Collect held flags before borrowing rng.
-                    let held: Vec<bool> =
-                        self.state.dice_pool.dice.iter().map(|d| d.held).collect();
-                    let display = held
-                        .iter()
-                        .map(|&h| {
-                            if h {
-                                None
-                            } else {
-                                Some(self.rng.random_range(1u8..=6))
-                            }
-                        })
-                        .collect();
-                    self.roll_animation = Some(RollAnimation {
-                        frames_remaining: ROLL_ANIM_FRAMES,
-                        display,
-                    });
-                }
-                true
-            }
-            (true, KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter) => {
-                self.state.begin_scoring();
-                true
-            }
-            (_, KeyCode::Char('q') | KeyCode::Char('Q')) => false,
-            _ => true,
-        }
-    }
-
-    fn handle_selecting(&mut self, code: KeyCode, cursor: usize) -> bool {
-        let from_boss = match self.state.phase {
-            GamePhase::SelectingCategory { from_boss, .. } => from_boss,
-            _ => false,
-        };
-
-        let available: Vec<ScoreCategory> = self
-            .state
-            .unlocked
-            .iter()
-            .filter(|c| !self.state.used_this_room.contains(c))
-            .cloned()
-            .collect();
-
-        if available.is_empty() {
-            return true;
-        }
-
-        let cursor = cursor.min(available.len() - 1);
-
-        match code {
-            KeyCode::Up => {
-                let new_cursor = if cursor == 0 {
-                    available.len() - 1
-                } else {
-                    cursor - 1
-                };
-                self.state.phase = GamePhase::SelectingCategory {
-                    cursor: new_cursor,
-                    from_boss,
-                };
-                true
-            }
-            KeyCode::Down => {
-                let new_cursor = if cursor + 1 >= available.len() {
-                    0
-                } else {
-                    cursor + 1
-                };
-                self.state.phase = GamePhase::SelectingCategory {
-                    cursor: new_cursor,
-                    from_boss,
-                };
-                true
-            }
-            KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
-                let chosen = available[cursor].clone();
-                self.state.score_category(chosen);
-                true
-            }
-            KeyCode::Esc | KeyCode::Char('r') | KeyCode::Char('R') => {
-                self.state.back_room();
-                true
-            }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => true,
-        }
-    }
-
-    fn handle_scored(&mut self, _code: KeyCode) -> bool {
-        let success = match &self.state.phase {
-            GamePhase::Scored { success, .. } => *success,
-            _ => return true,
-        };
-
-        let is_boss = self.state.dungeon.current_floor().boss_next();
-
-        if is_boss {
-            if success {
-                let options = self.pick_unlock_options();
-                self.unlock_options = options;
-                self.state.defeat_boss();
-            } else {
-                self.state.take_damage(20);
-                if !matches!(self.state.phase, GamePhase::GameOver) {
-                    self.state.begin_room(false);
-                    self.state.phase = GamePhase::Boss;
-                }
-            }
-            return true;
-        }
-
-        // Regular room: extract reward before mutating.
-        let reward_gold: u32 = if success {
-            match self.state.dungeon.current_floor().current_room() {
-                Some(room::Room::Challenge(t)) => t.reward_gold,
-                Some(room::Room::Elite(t)) => t.reward_gold,
-                _ => 0,
-            }
-        } else {
-            0
-        };
-
-        if success {
-            self.state.earn_gold(reward_gold);
-            self.state.dice_pool.reset_for_room();
-        } else {
-            self.state.take_damage(10);
-            if !matches!(self.state.phase, GamePhase::GameOver) {
-                self.state.begin_room(false);
-                self.state.phase = GamePhase::Rolling;
-            }
-        }
-
-        if matches!(self.state.phase, GamePhase::GameOver) {
-            return true;
-        }
-
-        if success {
-            let items = shop::generate_shop_items(&self.state, &mut self.rng);
-            self.state.phase = GamePhase::Shop { items, cursor: 0 };
-        }
-        true
-    }
-
-    fn handle_shop(&mut self, cursor: usize) {
-        // Only proceed if the player can afford the selected item.
-        if !match &self.state.phase {
-            GamePhase::Shop { items, .. } => items
-                .get(cursor)
-                .is_some_and(|it| self.state.gold >= it.price),
-            _ => false,
-        } {
-            return;
-        }
-
-        // Remove the item from the available list
-        let item = match &mut self.state.phase {
-            GamePhase::Shop { items, .. } if cursor < items.len() => Some(items.remove(cursor)),
-            _ => None,
-        };
-
-        //
-        if let Some(item) = item {
-            match item.kind {
-                shop::ShopItemKind::DieUpgrade(kind) => {
-                    self.state.spend_gold(item.price);
-                    // Extract remaining shop state and stash it while the player
-                    // picks which die and face to upgrade.
-                    let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
-                    if let GamePhase::Shop { items, cursor } = old {
-                        self.stashed_shop = Some((items, cursor));
-                    }
-                    self.state.phase = GamePhase::UpgradeSelectDie {
-                        die_cursor: 0,
-                        kind,
-                        from_shop: true,
-                        pending_die: None,
-                    };
-                }
-                shop::ShopItemKind::SpecialDie(kind) => {
-                    self.state.spend_gold(item.price);
-                    let pending_die = Some(kind.create_die());
-                    let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
-                    if let GamePhase::Shop { items, cursor } = old {
-                        self.stashed_shop = Some((items, cursor));
-                    }
-                    self.state.phase = GamePhase::UpgradeSelectDie {
-                        die_cursor: 0,
-                        kind: UpgradeKind::Augment,
-                        from_shop: true,
-                        pending_die,
-                    };
-                }
-                _ => {
-                    self.state.buy_shop_item(item);
-                    // Clamp cursor if it's now past the end.
-                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase
-                        && *cursor >= items.len()
-                        && !items.is_empty()
-                    {
-                        *cursor = items.len() - 1;
-                    }
-                }
-            }
-        }
-    }
-
-    fn handle_rest(&mut self, cursor: usize) {
-        match cursor {
-            0 => {
-                self.state.heal(15);
-                self.state.dungeon.current_floor_mut().advance();
-                self.transition_after_advance();
-            }
-            1 => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Augment,
-                    from_shop: false,
-                    pending_die: None,
-                };
-            }
-            _ => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Enchant,
-                    from_shop: false,
-                    pending_die: None,
-                };
-            }
-        }
-    }
-
     fn handle_rest_shop(
         &mut self,
         code: KeyCode,
@@ -638,6 +205,9 @@ impl App {
         len: usize,
         enter: fn(&mut App, usize),
     ) -> bool {
+        if is_quit(code) {
+            return false;
+        }
         match code {
             KeyCode::Up if len > 0 => {
                 self.state.phase.set_cursor((cursor + len - 1) % len);
@@ -656,226 +226,39 @@ impl App {
                 enter(self, cursor);
                 true
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
             _ => true,
         }
-    }
-
-    fn handle_upgrade_select_die(
-        &mut self,
-        code: KeyCode,
-        die_cursor: usize,
-        kind: UpgradeKind,
-        from_shop: bool,
-        pending_die: Option<Die>,
-    ) -> bool {
-        let pool_len = self.state.dice_pool.dice.len();
-        match code {
-            KeyCode::Left => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: (die_cursor + pool_len - 1) % pool_len,
-                    kind,
-                    from_shop,
-                    pending_die,
-                };
-                true
-            }
-            KeyCode::Right => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: (die_cursor + 1) % pool_len,
-                    kind,
-                    from_shop,
-                    pending_die,
-                };
-                true
-            }
-            KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
-                if let Some(die) = pending_die {
-                    self.state.replace_die_at(die_cursor, die);
-                    let (items, cursor) = self.stashed_shop.take().unwrap_or_default();
-                    self.state.phase = GamePhase::Shop { items, cursor };
-                } else {
-                    self.state.phase = GamePhase::UpgradeSelectFace {
-                        die_index: die_cursor,
-                        face_cursor: 0,
-                        kind,
-                        from_shop,
-                    };
-                }
-                true
-            }
-            KeyCode::Esc if !from_shop && pending_die.is_none() => {
-                self.state.phase = GamePhase::Rest { cursor: 0 };
-                true
-            }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => true,
-        }
-    }
-
-    fn handle_upgrade_select_face(
-        &mut self,
-        code: KeyCode,
-        die_index: usize,
-        face_cursor: usize,
-        kind: UpgradeKind,
-        from_shop: bool,
-    ) -> bool {
-        let faces_len = self.state.dice_pool.dice[die_index].faces().len();
-        match code {
-            KeyCode::Left => {
-                self.state.phase = GamePhase::UpgradeSelectFace {
-                    die_index,
-                    face_cursor: (face_cursor + faces_len - 1) % faces_len,
-                    kind,
-                    from_shop,
-                };
-                true
-            }
-            KeyCode::Right => {
-                self.state.phase = GamePhase::UpgradeSelectFace {
-                    die_index,
-                    face_cursor: (face_cursor + 1) % faces_len,
-                    kind,
-                    from_shop,
-                };
-                true
-            }
-            KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
-                let upgrade = match kind {
-                    UpgradeKind::Augment => DieUpgrade::Augment {
-                        face_index: face_cursor,
-                    },
-                    UpgradeKind::Enchant => DieUpgrade::Enchant {
-                        face_index: face_cursor,
-                        bonus_score: 5,
-                    },
-                };
-                self.state.upgrade_die(die_index, upgrade);
-                if from_shop {
-                    // Return to the shop with any remaining items.
-                    let (items, cursor) = self.stashed_shop.take().unwrap_or_default();
-                    self.state.phase = GamePhase::Shop { items, cursor };
-                } else {
-                    self.state.dungeon.current_floor_mut().advance();
-                    self.transition_after_advance();
-                }
-                true
-            }
-            KeyCode::Esc => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: die_index,
-                    kind,
-                    from_shop,
-                    pending_die: None,
-                };
-                true
-            }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => true,
-        }
-    }
-
-    fn handle_unlock(&mut self, code: KeyCode) -> bool {
-        if self.unlock_options.is_none() {
-            // All categories already unlocked: any key descends.
-            self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
-            return true;
-        }
-
-        let chosen = match (code, &self.unlock_options) {
-            (KeyCode::Char('1'), Some(opts)) => Some(opts[0].clone()),
-            (KeyCode::Char('2'), Some(opts)) => Some(opts[1].clone()),
-            _ => return true,
-        };
-
-        if let Some(cat) = chosen {
-            self.state.unlock_category(cat);
-            self.unlock_options = None;
-            self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
-        }
-
-        true
-    }
-
-    fn handle_choosing_room(&mut self, code: KeyCode, cursor: usize) -> bool {
-        match code {
-            KeyCode::Left | KeyCode::Up => {
-                self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
-                true
-            }
-            KeyCode::Right | KeyCode::Down => {
-                self.state.phase = GamePhase::ChoosingRoom { cursor: 1 };
-                true
-            }
-            KeyCode::Enter => {
-                self.state.dungeon.current_floor_mut().choose(cursor);
-                self.state.begin_room(true);
-                self.state.phase = match self.state.dungeon.current_floor().current_room() {
-                    Some(room::Room::Rest) => GamePhase::Rest { cursor: 0 },
-                    _ => GamePhase::Rolling,
-                };
-                true
-            }
-            KeyCode::Char('q') | KeyCode::Char('Q') => false,
-            _ => true,
-        }
-    }
-
-    fn handle_game_over(&mut self, code: KeyCode) -> bool {
-        matches!(
-            code,
-            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Enter
-        )
-        .then(|| false)
-        .unwrap_or(true)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fn roll_hint(&self) -> &'static str {
-        if self.state.dice_pool.rolls_remaining == self.state.dice_pool.max_rolls {
-            "[R] Roll  [Q] Quit"
-        } else {
-            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
+    // Shared by rolling.rs (Rolling/Boss) and selecting.rs (SelectingCategory),
+    // which both show the dice pool but pick a different score-view mode.
+    fn dice_widget(&self) -> dice_view::DiceView<'_> {
+        match &self.roll_animation {
+            Some(anim) => dice_view::DiceView::animated(&self.state.dice_pool, &anim.display),
+            None => dice_view::DiceView::new(&self.state.dice_pool),
         }
+    }
+
+    fn score_view_widget(&self) -> score_view::ScoreView<'_> {
+        score_view::ScoreView::new(
+            &self.state.dice_pool,
+            &self.state.unlocked,
+            &self.state.used_this_room,
+        )
     }
 
     // Advance the roll animation by one tick (called once per render loop iteration).
     // When the frame count reaches zero, clears the animation so real values render.
     fn tick_animation(&mut self) {
-        // Decrement and check completion; borrow of roll_animation ends after this block.
-        let is_active = match self.roll_animation.as_mut() {
+        let still_active = match self.roll_animation.as_mut() {
             None => return,
-            Some(anim) => {
-                anim.frames_remaining -= 1;
-                anim.frames_remaining > 0
-            }
+            Some(anim) => anim.tick(&self.state.dice_pool, &mut self.rng),
         };
 
-        if !is_active {
+        if !still_active {
             self.roll_animation = None;
-            return;
-        }
-
-        // Build fresh random display values. Collect held flags first so the
-        // borrow on dice_pool ends before we borrow rng.
-        let held: Vec<bool> = self.state.dice_pool.dice.iter().map(|d| d.held).collect();
-        let new_display: Vec<Option<u8>> = held
-            .iter()
-            .map(|&h| {
-                if h {
-                    None
-                } else {
-                    Some(self.rng.random_range(1u8..=6))
-                }
-            })
-            .collect();
-
-        if let Some(anim) = self.roll_animation.as_mut() {
-            anim.display = new_display;
         }
     }
 
@@ -887,36 +270,6 @@ impl App {
         } else {
             self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
         }
-    }
-
-    // Pick two unique categories from those not yet unlocked. Returns None when
-    // fewer than two remain (all categories have been unlocked).
-    fn pick_unlock_options(&mut self) -> Option<[ScoreCategory; 2]> {
-        const ALL_UNLOCKABLE: &[ScoreCategory] = &[
-            ScoreCategory::Ones,
-            ScoreCategory::Twos,
-            ScoreCategory::Threes,
-            ScoreCategory::Fours,
-            ScoreCategory::Fives,
-            ScoreCategory::Sixes,
-            ScoreCategory::FullHouse,
-            ScoreCategory::SmallStraight,
-            ScoreCategory::LargeStraight,
-            ScoreCategory::Yahtzee,
-        ];
-
-        let available: Vec<ScoreCategory> = ALL_UNLOCKABLE
-            .iter()
-            .filter(|c| !self.state.unlocked.contains(c))
-            .cloned()
-            .collect();
-
-        if available.len() < 2 {
-            return None;
-        }
-
-        let chosen: Vec<&ScoreCategory> = available.choose_multiple(&mut self.rng, 2).collect();
-        Some([chosen[0].clone(), chosen[1].clone()])
     }
 
     fn vertical_layout(&self, frame: &mut ratatui::Frame, hints: &str) -> Rect {
