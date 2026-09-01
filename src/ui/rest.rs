@@ -8,6 +8,7 @@
 //
 // Each option has a rounded box drawn around it.
 
+use crossterm::event::KeyCode;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -19,7 +20,7 @@ use ratatui::{
 
 use crate::game::{GamePhase, UpgradeKind};
 
-use super::App;
+use super::{App, Phase};
 
 const ITEM_H: u16 = 4;
 
@@ -63,34 +64,42 @@ impl Widget for RestView {
     }
 }
 
-impl App {
-    pub(super) fn render_rest(&self, frame: &mut ratatui::Frame, cursor: usize) {
-        self.render_rest_shop(frame, RestView::new(cursor));
+pub(super) struct RestPhase {
+    pub cursor: usize,
+}
+
+impl Phase for RestPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_rest_shop(frame, RestView::new(self.cursor));
     }
 
-    pub(super) fn handle_rest(&mut self, cursor: usize) {
-        match cursor {
-            0 => {
-                self.state.heal(15);
-                self.state.dungeon.current_floor_mut().advance();
-                self.transition_after_advance();
-            }
-            1 => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Augment,
-                    from_shop: false,
-                    pending_die: None,
-                };
-            }
-            _ => {
-                self.state.phase = GamePhase::UpgradeSelectDie {
-                    die_cursor: 0,
-                    kind: UpgradeKind::Enchant,
-                    from_shop: false,
-                    pending_die: None,
-                };
-            }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_rest_shop(code, self.cursor, 3, choose)
+    }
+}
+
+fn choose(app: &mut App, cursor: usize) {
+    match cursor {
+        0 => {
+            app.state.heal(15);
+            app.state.dungeon.current_floor_mut().advance();
+            app.transition_after_advance();
+        }
+        1 => {
+            app.state.phase = GamePhase::UpgradeSelectDie {
+                die_cursor: 0,
+                kind: UpgradeKind::Augment,
+                from_shop: false,
+                pending_die: None,
+            };
+        }
+        _ => {
+            app.state.phase = GamePhase::UpgradeSelectDie {
+                die_cursor: 0,
+                kind: UpgradeKind::Enchant,
+                from_shop: false,
+                pending_die: None,
+            };
         }
     }
 }

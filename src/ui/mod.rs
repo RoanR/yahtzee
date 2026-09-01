@@ -71,18 +71,6 @@ trait Phase {
 // Thin wrappers delegating to each phase's existing render_X/handle_X App
 // methods; each is being relocated into its own sibling module (with its
 // logic inlined directly) one at a time.
-struct RestPhase {
-    cursor: usize,
-}
-impl Phase for RestPhase {
-    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_rest(frame, self.cursor);
-    }
-    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_rest_shop(code, self.cursor, 3, App::handle_rest)
-    }
-}
-
 struct UpgradeSelectDiePhase {
     die_cursor: usize,
     kind: UpgradeKind,
@@ -224,7 +212,7 @@ impl App {
             }
             GamePhase::Scored { .. } => Box::new(scored::ScoredPhase),
             GamePhase::Shop { cursor, .. } => Box::new(shop::ShopPhase { cursor: *cursor }),
-            GamePhase::Rest { cursor } => Box::new(RestPhase { cursor: *cursor }),
+            GamePhase::Rest { cursor } => Box::new(rest::RestPhase { cursor: *cursor }),
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
