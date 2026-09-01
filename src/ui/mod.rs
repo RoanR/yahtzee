@@ -45,8 +45,7 @@ use ratatui::{
 };
 
 use crate::{
-    dice::Die,
-    game::{GamePhase, GameState, UpgradeKind},
+    game::{GamePhase, GameState},
     scoring::ScoreCategory,
 };
 
@@ -71,48 +70,6 @@ trait Phase {
 // Thin wrappers delegating to each phase's existing render_X/handle_X App
 // methods; each is being relocated into its own sibling module (with its
 // logic inlined directly) one at a time.
-struct UpgradeSelectDiePhase {
-    die_cursor: usize,
-    kind: UpgradeKind,
-    from_shop: bool,
-    pending_die: Option<Die>,
-}
-impl Phase for UpgradeSelectDiePhase {
-    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_upgrade_select_die(frame, self.die_cursor, self.kind, self.pending_die.as_ref());
-    }
-    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_upgrade_select_die(
-            code,
-            self.die_cursor,
-            self.kind,
-            self.from_shop,
-            self.pending_die.clone(),
-        )
-    }
-}
-
-struct UpgradeSelectFacePhase {
-    die_index: usize,
-    face_cursor: usize,
-    kind: UpgradeKind,
-    from_shop: bool,
-}
-impl Phase for UpgradeSelectFacePhase {
-    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_upgrade_select_face(frame, self.die_index, self.face_cursor, self.kind);
-    }
-    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_upgrade_select_face(
-            code,
-            self.die_index,
-            self.face_cursor,
-            self.kind,
-            self.from_shop,
-        )
-    }
-}
-
 struct ChoosingRoomPhase {
     cursor: usize,
 }
@@ -217,19 +174,22 @@ impl App {
                 die_cursor,
                 kind,
                 from_shop,
-                pending_die,
-            } => Box::new(UpgradeSelectDiePhase {
+                // The pending die itself isn't copied out: it's owned by GameState
+                // and isn't Copy (holds a Vec<DieFace>), so UpgradeSelectDiePhase
+                // re-reads it from GameState::phase in render/handle_key instead
+                // (same pattern as ShopPhase re-reading `items`).
+                pending_die: _,
+            } => Box::new(upgrade::UpgradeSelectDiePhase {
                 die_cursor: *die_cursor,
                 kind: *kind,
                 from_shop: *from_shop,
-                pending_die: pending_die.clone(),
             }),
             GamePhase::UpgradeSelectFace {
                 die_index,
                 face_cursor,
                 kind,
                 from_shop,
-            } => Box::new(UpgradeSelectFacePhase {
+            } => Box::new(upgrade::UpgradeSelectFacePhase {
                 die_index: *die_index,
                 face_cursor: *face_cursor,
                 kind: *kind,
