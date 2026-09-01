@@ -8,6 +8,7 @@
 //
 // Each item has a rounded box drawn around it
 
+use crossterm::event::KeyCode;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -22,7 +23,7 @@ use crate::{
     shop::{self, ShopItem},
 };
 
-use super::App;
+use super::{App, Phase};
 
 // Each box is 4 tall (border + title/value + description + border)
 // Each box is the width of the passed area -2
@@ -87,74 +88,86 @@ impl Widget for ShopView<'_> {
     }
 }
 
-impl App {
-    pub(super) fn render_shop(
-        &self,
-        frame: &mut ratatui::Frame,
-        items: &[ShopItem],
-        cursor: usize,
-    ) {
-        self.render_rest_shop(frame, ShopView::new(items, self.state.gold, cursor));
+// Only owns cursor: ShopItem isn't Clone (it can hold a Box<dyn Relic>), so
+// items are read fresh from GameState::phase in render/handle_key rather
+// than cloned into the phase struct.
+pub(super) struct ShopPhase {
+    pub cursor: usize,
+}
+
+impl Phase for ShopPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        let GamePhase::Shop { items, .. } = &app.state.phase else {
+            return;
+        };
+        app.render_rest_shop(frame, ShopView::new(items, app.state.gold, self.cursor));
     }
 
-    pub(super) fn handle_shop(&mut self, cursor: usize) {
-        // Only proceed if the player can afford the selected item.
-        if !match &self.state.phase {
-            GamePhase::Shop { items, .. } => items
-                .get(cursor)
-                .is_some_and(|it| self.state.gold >= it.price),
-            _ => false,
-        } {
-            return;
-        }
-
-        // Remove the item from the available list
-        let item = match &mut self.state.phase {
-            GamePhase::Shop { items, .. } if cursor < items.len() => Some(items.remove(cursor)),
-            _ => None,
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        let GamePhase::Shop { items, .. } = &app.state.phase else {
+            return true;
         };
+        let len = items.len();
+        app.handle_rest_shop(code, self.cursor, len, purchase)
+    }
+}
 
-        //
-        if let Some(item) = item {
-            match item.kind {
-                shop::ShopItemKind::DieUpgrade(kind) => {
-                    self.state.spend_gold(item.price);
-                    // Extract remaining shop state and stash it while the player
-                    // picks which die and face to upgrade.
-                    let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
-                    if let GamePhase::Shop { items, cursor } = old {
-                        self.stashed_shop = Some((items, cursor));
-                    }
-                    self.state.phase = GamePhase::UpgradeSelectDie {
-                        die_cursor: 0,
-                        kind,
-                        from_shop: true,
-                        pending_die: None,
-                    };
+fn purchase(app: &mut App, cursor: usize) {
+    // Only proceed if the player can afford the selected item.
+    if !match &app.state.phase {
+        GamePhase::Shop { items, .. } => items
+            .get(cursor)
+            .is_some_and(|it| app.state.gold >= it.price),
+        _ => false,
+    } {
+        return;
+    }
+
+    // Remove the item from the available list
+    let item = match &mut app.state.phase {
+        GamePhase::Shop { items, .. } if cursor < items.len() => Some(items.remove(cursor)),
+        _ => None,
+    };
+
+    if let Some(item) = item {
+        match item.kind {
+            shop::ShopItemKind::DieUpgrade(kind) => {
+                app.state.spend_gold(item.price);
+                // Extract remaining shop state and stash it while the player
+                // picks which die and face to upgrade.
+                let old = std::mem::replace(&mut app.state.phase, GamePhase::GameOver);
+                if let GamePhase::Shop { items, cursor } = old {
+                    app.stashed_shop = Some((items, cursor));
                 }
-                shop::ShopItemKind::SpecialDie(kind) => {
-                    self.state.spend_gold(item.price);
-                    let pending_die = Some(kind.create_die());
-                    let old = std::mem::replace(&mut self.state.phase, GamePhase::GameOver);
-                    if let GamePhase::Shop { items, cursor } = old {
-                        self.stashed_shop = Some((items, cursor));
-                    }
-                    self.state.phase = GamePhase::UpgradeSelectDie {
-                        die_cursor: 0,
-                        kind: UpgradeKind::Augment,
-                        from_shop: true,
-                        pending_die,
-                    };
+                app.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: 0,
+                    kind,
+                    from_shop: true,
+                    pending_die: None,
+                };
+            }
+            shop::ShopItemKind::SpecialDie(kind) => {
+                app.state.spend_gold(item.price);
+                let pending_die = Some(kind.create_die());
+                let old = std::mem::replace(&mut app.state.phase, GamePhase::GameOver);
+                if let GamePhase::Shop { items, cursor } = old {
+                    app.stashed_shop = Some((items, cursor));
                 }
-                _ => {
-                    self.state.buy_shop_item(item);
-                    // Clamp cursor if it's now past the end.
-                    if let GamePhase::Shop { items, cursor } = &mut self.state.phase
-                        && *cursor >= items.len()
-                        && !items.is_empty()
-                    {
-                        *cursor = items.len() - 1;
-                    }
+                app.state.phase = GamePhase::UpgradeSelectDie {
+                    die_cursor: 0,
+                    kind: UpgradeKind::Augment,
+                    from_shop: true,
+                    pending_die,
+                };
+            }
+            _ => {
+                app.state.buy_shop_item(item);
+                // Clamp cursor if it's now past the end.
+                if let GamePhase::Shop { items, cursor } = &mut app.state.phase
+                    && *cursor >= items.len()
+                    && !items.is_empty()
+                {
+                    *cursor = items.len() - 1;
                 }
             }
         }
