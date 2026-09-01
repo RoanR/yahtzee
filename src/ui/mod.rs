@@ -5,15 +5,17 @@
 //   2. Polls for a crossterm event.
 //   3. Dispatches the event to the appropriate input handler.
 //
-// Each GamePhase variant has a small Phase-implementing wrapper struct
-// (defined here for now; each is being moved into its own sibling module
-// alongside that phase's render_*/handle_* methods) so phase_view() is the
-// only place that needs updating when a phase is added, instead of two
-// separate matches. This file holds only what's genuinely shared: the App
-// struct itself, the run loop, the Phase trait and phase_view() dispatch,
-// roll-animation ticking, and small helpers (dice_widget, score_view_widget,
-// vertical_layout, is_quit, render_rest_shop/handle_rest_shop,
-// transition_after_advance) used by two or more phases.
+// Each GamePhase variant has a small Phase-implementing struct (e.g.
+// rolling::RollingPhase, shop::ShopPhase) living in its own sibling module
+// alongside that phase's widget, if it has one; render()/handle_key() for
+// that phase are the struct's own Phase impl. phase_view() is the single
+// place mapping GamePhase to its struct, so adding a phase means adding one
+// match arm there instead of wiring into two separate matches. This file
+// holds only what's genuinely shared: the App struct itself, the run loop,
+// the Phase trait and phase_view() dispatch, roll-animation ticking, and
+// small helpers (dice_widget, score_view_widget, vertical_layout, is_quit,
+// render_rest_shop/handle_rest_shop, transition_after_advance) used by two
+// or more phases.
 
 pub mod dice_view;
 pub mod dungeon_view;
@@ -59,7 +61,7 @@ fn is_quit(code: KeyCode) -> bool {
 // A GamePhase, as a self-contained state that knows how to render itself and
 // handle its own input. Built fresh from GameState::phase each time it's
 // needed (see App::phase_view) rather than stored, so it owns whatever data
-// it needs (cloning small Vecs/Options out of GamePhase where relevant) and
+// it needs (cloning small Copy fields out of GamePhase where relevant) and
 // can never go stale relative to the phase GameState is actually in.
 trait Phase {
     fn render(&self, app: &App, frame: &mut ratatui::Frame);
@@ -67,16 +69,53 @@ trait Phase {
     fn handle_key(&self, app: &mut App, code: KeyCode) -> bool;
 }
 
-// Thin wrappers delegating to each phase's existing render_X/handle_X App
-// methods; each is being relocated into its own sibling module (with its
-// logic inlined directly) one at a time.
-struct GameOverPhase;
-impl Phase for GameOverPhase {
+// The concrete Phase struct for the current GamePhase, as a plain enum rather
+// than a `Box<dyn Phase>`: the set of phases is closed and known at compile
+// time, so this dispatches with a stack-allocated match instead of a
+// per-frame heap allocation (App::render/handle_key build one of these on
+// every tick and every keypress).
+enum PhaseView {
+    Rolling(rolling::RollingPhase),
+    Selecting(selecting::SelectingPhase),
+    Scored(scored::ScoredPhase),
+    Shop(shop::ShopPhase),
+    Rest(rest::RestPhase),
+    UpgradeSelectDie(upgrade::UpgradeSelectDiePhase),
+    UpgradeSelectFace(upgrade::UpgradeSelectFacePhase),
+    ChoosingRoom(room_select::ChoosingRoomPhase),
+    CategoryUnlock(unlock::CategoryUnlockPhase),
+    GameOver(game_over::GameOverPhase),
+}
+
+impl Phase for PhaseView {
     fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_game_over(frame);
+        match self {
+            PhaseView::Rolling(p) => p.render(app, frame),
+            PhaseView::Selecting(p) => p.render(app, frame),
+            PhaseView::Scored(p) => p.render(app, frame),
+            PhaseView::Shop(p) => p.render(app, frame),
+            PhaseView::Rest(p) => p.render(app, frame),
+            PhaseView::UpgradeSelectDie(p) => p.render(app, frame),
+            PhaseView::UpgradeSelectFace(p) => p.render(app, frame),
+            PhaseView::ChoosingRoom(p) => p.render(app, frame),
+            PhaseView::CategoryUnlock(p) => p.render(app, frame),
+            PhaseView::GameOver(p) => p.render(app, frame),
+        }
     }
+
     fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_game_over(code)
+        match self {
+            PhaseView::Rolling(p) => p.handle_key(app, code),
+            PhaseView::Selecting(p) => p.handle_key(app, code),
+            PhaseView::Scored(p) => p.handle_key(app, code),
+            PhaseView::Shop(p) => p.handle_key(app, code),
+            PhaseView::Rest(p) => p.handle_key(app, code),
+            PhaseView::UpgradeSelectDie(p) => p.handle_key(app, code),
+            PhaseView::UpgradeSelectFace(p) => p.handle_key(app, code),
+            PhaseView::ChoosingRoom(p) => p.handle_key(app, code),
+            PhaseView::CategoryUnlock(p) => p.handle_key(app, code),
+            PhaseView::GameOver(p) => p.handle_key(app, code),
+        }
     }
 }
 
@@ -139,15 +178,15 @@ impl App {
     // ── Phase dispatch ───────────────────────────────────────────────────────
 
     // The single place that maps the current GamePhase to its Phase struct.
-    fn phase_view(&self) -> Box<dyn Phase> {
+    fn phase_view(&self) -> PhaseView {
         match &self.state.phase {
-            GamePhase::Rolling | GamePhase::Boss => Box::new(rolling::RollingPhase),
+            GamePhase::Rolling | GamePhase::Boss => PhaseView::Rolling(rolling::RollingPhase),
             GamePhase::SelectingCategory { cursor, .. } => {
-                Box::new(selecting::SelectingPhase { cursor: *cursor })
+                PhaseView::Selecting(selecting::SelectingPhase { cursor: *cursor })
             }
-            GamePhase::Scored { .. } => Box::new(scored::ScoredPhase),
-            GamePhase::Shop { cursor, .. } => Box::new(shop::ShopPhase { cursor: *cursor }),
-            GamePhase::Rest { cursor } => Box::new(rest::RestPhase { cursor: *cursor }),
+            GamePhase::Scored { .. } => PhaseView::Scored(scored::ScoredPhase),
+            GamePhase::Shop { cursor, .. } => PhaseView::Shop(shop::ShopPhase { cursor: *cursor }),
+            GamePhase::Rest { cursor } => PhaseView::Rest(rest::RestPhase { cursor: *cursor }),
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
@@ -157,7 +196,7 @@ impl App {
                 // re-reads it from GameState::phase in render/handle_key instead
                 // (same pattern as ShopPhase re-reading `items`).
                 pending_die: _,
-            } => Box::new(upgrade::UpgradeSelectDiePhase {
+            } => PhaseView::UpgradeSelectDie(upgrade::UpgradeSelectDiePhase {
                 die_cursor: *die_cursor,
                 kind: *kind,
                 from_shop: *from_shop,
@@ -167,17 +206,17 @@ impl App {
                 face_cursor,
                 kind,
                 from_shop,
-            } => Box::new(upgrade::UpgradeSelectFacePhase {
+            } => PhaseView::UpgradeSelectFace(upgrade::UpgradeSelectFacePhase {
                 die_index: *die_index,
                 face_cursor: *face_cursor,
                 kind: *kind,
                 from_shop: *from_shop,
             }),
             GamePhase::ChoosingRoom { cursor } => {
-                Box::new(room_select::ChoosingRoomPhase { cursor: *cursor })
+                PhaseView::ChoosingRoom(room_select::ChoosingRoomPhase { cursor: *cursor })
             }
-            GamePhase::CategoryUnlock => Box::new(unlock::CategoryUnlockPhase),
-            GamePhase::GameOver => Box::new(GameOverPhase),
+            GamePhase::CategoryUnlock => PhaseView::CategoryUnlock(unlock::CategoryUnlockPhase),
+            GamePhase::GameOver => PhaseView::GameOver(game_over::GameOverPhase),
         }
     }
 
