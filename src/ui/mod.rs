@@ -5,13 +5,15 @@
 //   2. Polls for a crossterm event.
 //   3. Dispatches the event to the appropriate input handler.
 //
-// Each GamePhase's render_*/handle_* methods live together in one sibling
-// module (e.g. rolling.rs, shop.rs, upgrade.rs) as extra `impl App` blocks,
-// alongside that phase's widget if it has one. This file holds only what's
-// genuinely shared: the App struct itself, the run loop, render()/handle_key()
-// dispatch, roll-animation ticking, and small helpers (dice_widget,
-// score_view_widget, vertical_layout, is_quit, render_rest_shop/
-// handle_rest_shop, transition_after_advance) used by two or more phases.
+// Each GamePhase variant has a small Phase-implementing wrapper struct
+// (defined here for now; each is being moved into its own sibling module
+// alongside that phase's render_*/handle_* methods) so phase_view() is the
+// only place that needs updating when a phase is added, instead of two
+// separate matches. This file holds only what's genuinely shared: the App
+// struct itself, the run loop, the Phase trait and phase_view() dispatch,
+// roll-animation ticking, and small helpers (dice_widget, score_view_widget,
+// vertical_layout, is_quit, render_rest_shop/handle_rest_shop,
+// transition_after_advance) used by two or more phases.
 
 pub mod dice_view;
 pub mod dungeon_view;
@@ -43,7 +45,8 @@ use ratatui::{
 };
 
 use crate::{
-    game::{GamePhase, GameState},
+    dice::Die,
+    game::{GamePhase, GameState, UpgradeKind},
     scoring::ScoreCategory,
 };
 
@@ -52,6 +55,160 @@ use roll_animation::RollAnimation;
 // Shared by every phase's input handler to quit on 'q'/'Q'.
 fn is_quit(code: KeyCode) -> bool {
     matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'))
+}
+
+// A GamePhase, as a self-contained state that knows how to render itself and
+// handle its own input. Built fresh from GameState::phase each time it's
+// needed (see App::phase_view) rather than stored, so it owns whatever data
+// it needs (cloning small Vecs/Options out of GamePhase where relevant) and
+// can never go stale relative to the phase GameState is actually in.
+trait Phase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame);
+    // Returns false to signal the event loop to exit.
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool;
+}
+
+// Thin wrappers delegating to each phase's existing render_X/handle_X App
+// methods; each is being relocated into its own sibling module (with its
+// logic inlined directly) one at a time.
+struct RollingPhase;
+impl Phase for RollingPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_game(frame);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_rolling(code)
+    }
+}
+
+struct SelectingPhase {
+    cursor: usize,
+}
+impl Phase for SelectingPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_selecting(frame, self.cursor);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_selecting(code, self.cursor)
+    }
+}
+
+struct ScoredPhase;
+impl Phase for ScoredPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_scored(frame);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_scored(code)
+    }
+}
+
+// Only owns cursor: ShopItem isn't Clone (it can hold a Box<dyn Relic>), so
+// items are read fresh from GameState::phase in render/handle_key rather
+// than cloned into the phase struct.
+struct ShopPhase {
+    cursor: usize,
+}
+impl Phase for ShopPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        let GamePhase::Shop { items, .. } = &app.state.phase else {
+            return;
+        };
+        app.render_shop(frame, items, self.cursor);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        let GamePhase::Shop { items, .. } = &app.state.phase else {
+            return true;
+        };
+        let len = items.len();
+        app.handle_rest_shop(code, self.cursor, len, App::handle_shop)
+    }
+}
+
+struct RestPhase {
+    cursor: usize,
+}
+impl Phase for RestPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_rest(frame, self.cursor);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_rest_shop(code, self.cursor, 3, App::handle_rest)
+    }
+}
+
+struct UpgradeSelectDiePhase {
+    die_cursor: usize,
+    kind: UpgradeKind,
+    from_shop: bool,
+    pending_die: Option<Die>,
+}
+impl Phase for UpgradeSelectDiePhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_upgrade_select_die(frame, self.die_cursor, self.kind, self.pending_die.as_ref());
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_upgrade_select_die(
+            code,
+            self.die_cursor,
+            self.kind,
+            self.from_shop,
+            self.pending_die.clone(),
+        )
+    }
+}
+
+struct UpgradeSelectFacePhase {
+    die_index: usize,
+    face_cursor: usize,
+    kind: UpgradeKind,
+    from_shop: bool,
+}
+impl Phase for UpgradeSelectFacePhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_upgrade_select_face(frame, self.die_index, self.face_cursor, self.kind);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_upgrade_select_face(
+            code,
+            self.die_index,
+            self.face_cursor,
+            self.kind,
+            self.from_shop,
+        )
+    }
+}
+
+struct ChoosingRoomPhase {
+    cursor: usize,
+}
+impl Phase for ChoosingRoomPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_choosing_room(frame, self.cursor);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_choosing_room(code, self.cursor)
+    }
+}
+
+struct CategoryUnlockPhase;
+impl Phase for CategoryUnlockPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_unlock(frame);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_unlock(code)
+    }
+}
+
+struct GameOverPhase;
+impl Phase for GameOverPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        app.render_game_over(frame);
+    }
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        app.handle_game_over(code)
+    }
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -110,33 +267,48 @@ impl App {
         Ok(())
     }
 
-    // ── Rendering ─────────────────────────────────────────────────────────────
+    // ── Phase dispatch ───────────────────────────────────────────────────────
 
-    // Dispatch to the correct screen renderer based on current phase.
-    fn render(&self, frame: &mut ratatui::Frame) {
+    // The single place that maps the current GamePhase to its Phase struct.
+    fn phase_view(&self) -> Box<dyn Phase> {
         match &self.state.phase {
-            GamePhase::Rolling => self.render_game(frame),
-            GamePhase::SelectingCategory { cursor, .. } => self.render_selecting(frame, *cursor),
-            GamePhase::Scored { .. } => self.render_scored(frame),
-            GamePhase::Boss => self.render_game(frame),
-            GamePhase::Shop { items, cursor } => self.render_shop(frame, items, *cursor),
-            GamePhase::Rest { cursor } => self.render_rest(frame, *cursor),
+            GamePhase::Rolling | GamePhase::Boss => Box::new(RollingPhase),
+            GamePhase::SelectingCategory { cursor, .. } => {
+                Box::new(SelectingPhase { cursor: *cursor })
+            }
+            GamePhase::Scored { .. } => Box::new(ScoredPhase),
+            GamePhase::Shop { cursor, .. } => Box::new(ShopPhase { cursor: *cursor }),
+            GamePhase::Rest { cursor } => Box::new(RestPhase { cursor: *cursor }),
             GamePhase::UpgradeSelectDie {
                 die_cursor,
                 kind,
+                from_shop,
                 pending_die,
-                ..
-            } => self.render_upgrade_select_die(frame, *die_cursor, *kind, pending_die.as_ref()),
+            } => Box::new(UpgradeSelectDiePhase {
+                die_cursor: *die_cursor,
+                kind: *kind,
+                from_shop: *from_shop,
+                pending_die: pending_die.clone(),
+            }),
             GamePhase::UpgradeSelectFace {
                 die_index,
                 face_cursor,
                 kind,
-                ..
-            } => self.render_upgrade_select_face(frame, *die_index, *face_cursor, *kind),
-            GamePhase::ChoosingRoom { cursor } => self.render_choosing_room(frame, *cursor),
-            GamePhase::CategoryUnlock => self.render_unlock(frame),
-            GamePhase::GameOver => self.render_game_over(frame),
+                from_shop,
+            } => Box::new(UpgradeSelectFacePhase {
+                die_index: *die_index,
+                face_cursor: *face_cursor,
+                kind: *kind,
+                from_shop: *from_shop,
+            }),
+            GamePhase::ChoosingRoom { cursor } => Box::new(ChoosingRoomPhase { cursor: *cursor }),
+            GamePhase::CategoryUnlock => Box::new(CategoryUnlockPhase),
+            GamePhase::GameOver => Box::new(GameOverPhase),
         }
+    }
+
+    fn render(&self, frame: &mut ratatui::Frame) {
+        self.phase_view().render(self, frame);
     }
 
     // Used for shop and rest sites
@@ -156,46 +328,7 @@ impl App {
         if self.roll_animation.is_some() {
             return !is_quit(code);
         }
-        match &self.state.phase {
-            GamePhase::Rolling => self.handle_rolling(code),
-            GamePhase::SelectingCategory { cursor, .. } => {
-                let cursor = *cursor;
-                self.handle_selecting(code, cursor)
-            }
-            GamePhase::Scored { .. } => self.handle_scored(code),
-            GamePhase::Boss => self.handle_rolling(code),
-            GamePhase::Shop { cursor, items } => {
-                self.handle_rest_shop(code, *cursor, items.len(), self::App::handle_shop)
-            }
-            GamePhase::Rest { cursor } => {
-                self.handle_rest_shop(code, *cursor, 3, self::App::handle_rest)
-            }
-            GamePhase::UpgradeSelectDie {
-                die_cursor,
-                kind,
-                from_shop,
-                pending_die,
-            } => {
-                let (c, k, fs) = (*die_cursor, *kind, *from_shop);
-                let pd = pending_die.clone();
-                self.handle_upgrade_select_die(code, c, k, fs, pd)
-            }
-            GamePhase::UpgradeSelectFace {
-                die_index,
-                face_cursor,
-                kind,
-                from_shop,
-            } => {
-                let (di, fc, k, fs) = (*die_index, *face_cursor, *kind, *from_shop);
-                self.handle_upgrade_select_face(code, di, fc, k, fs)
-            }
-            GamePhase::ChoosingRoom { cursor } => {
-                let cursor = *cursor;
-                self.handle_choosing_room(code, cursor)
-            }
-            GamePhase::CategoryUnlock => self.handle_unlock(code),
-            GamePhase::GameOver => self.handle_game_over(code),
-        }
+        self.phase_view().handle_key(self, code)
     }
 
     fn handle_rest_shop(
