@@ -70,16 +70,6 @@ trait Phase {
 // Thin wrappers delegating to each phase's existing render_X/handle_X App
 // methods; each is being relocated into its own sibling module (with its
 // logic inlined directly) one at a time.
-struct CategoryUnlockPhase;
-impl Phase for CategoryUnlockPhase {
-    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_unlock(frame);
-    }
-    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_unlock(code)
-    }
-}
-
 struct GameOverPhase;
 impl Phase for GameOverPhase {
     fn render(&self, app: &App, frame: &mut ratatui::Frame) {
@@ -186,7 +176,7 @@ impl App {
             GamePhase::ChoosingRoom { cursor } => {
                 Box::new(room_select::ChoosingRoomPhase { cursor: *cursor })
             }
-            GamePhase::CategoryUnlock => Box::new(CategoryUnlockPhase),
+            GamePhase::CategoryUnlock => Box::new(unlock::CategoryUnlockPhase),
             GamePhase::GameOver => Box::new(GameOverPhase),
         }
     }
