@@ -71,16 +71,7 @@ trait Phase {
 // Thin wrappers delegating to each phase's existing render_X/handle_X App
 // methods; each is being relocated into its own sibling module (with its
 // logic inlined directly) one at a time.
-struct ScoredPhase;
-impl Phase for ScoredPhase {
-    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_scored(frame);
-    }
-    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_scored(code)
-    }
-}
-
+//
 // Only owns cursor: ShopItem isn't Clone (it can hold a Box<dyn Relic>), so
 // items are read fresh from GameState::phase in render/handle_key rather
 // than cloned into the phase struct.
@@ -254,7 +245,7 @@ impl App {
             GamePhase::SelectingCategory { cursor, .. } => {
                 Box::new(selecting::SelectingPhase { cursor: *cursor })
             }
-            GamePhase::Scored { .. } => Box::new(ScoredPhase),
+            GamePhase::Scored { .. } => Box::new(scored::ScoredPhase),
             GamePhase::Shop { cursor, .. } => Box::new(ShopPhase { cursor: *cursor }),
             GamePhase::Rest { cursor } => Box::new(RestPhase { cursor: *cursor }),
             GamePhase::UpgradeSelectDie {
