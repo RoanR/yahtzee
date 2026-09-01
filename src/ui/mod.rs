@@ -71,18 +71,6 @@ trait Phase {
 // Thin wrappers delegating to each phase's existing render_X/handle_X App
 // methods; each is being relocated into its own sibling module (with its
 // logic inlined directly) one at a time.
-struct SelectingPhase {
-    cursor: usize,
-}
-impl Phase for SelectingPhase {
-    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
-        app.render_selecting(frame, self.cursor);
-    }
-    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
-        app.handle_selecting(code, self.cursor)
-    }
-}
-
 struct ScoredPhase;
 impl Phase for ScoredPhase {
     fn render(&self, app: &App, frame: &mut ratatui::Frame) {
@@ -264,7 +252,7 @@ impl App {
         match &self.state.phase {
             GamePhase::Rolling | GamePhase::Boss => Box::new(rolling::RollingPhase),
             GamePhase::SelectingCategory { cursor, .. } => {
-                Box::new(SelectingPhase { cursor: *cursor })
+                Box::new(selecting::SelectingPhase { cursor: *cursor })
             }
             GamePhase::Scored { .. } => Box::new(ScoredPhase),
             GamePhase::Shop { cursor, .. } => Box::new(ShopPhase { cursor: *cursor }),
