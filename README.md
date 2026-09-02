@@ -65,10 +65,10 @@ Each boss applies a **debuff** at the start of the fight and has a **weakness ca
 
 | Floor | Boss         | Weakness        | Debuff                                          |
 |-------|--------------|-----------------|-------------------------------------------------|
-| 1     | Rat King     | Pair            | One die always shows 1 at the start of each roll |
-| 2     | Stone Golem  | Upper Section   | Each 1 rolled costs 2 extra HP                  |
+| 1     | Rat King     | Chance          | One die always shows 1 at the start of each roll |
+| 2     | Stone Golem  | Sixes           | Each 1 rolled costs 2 extra HP                  |
 | 3     | Goblin King  | Full House      | Only 2 rolls per attempt instead of 3           |
-| 4     | Dark Wizard  | Straight        | One randomly selected die is locked each roll   |
+| 4     | Dark Wizard  | Small Straight  | One randomly selected die is locked each roll   |
 | 5     | The Dragon   | Yahtzee         | Target is doubled; scoring Yahtzee heals 15 HP  |
 
 ---
