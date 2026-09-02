@@ -10,61 +10,64 @@
 use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout};
 
-use super::{App, is_quit, roll_animation::RollAnimation};
+use super::{App, Phase, is_quit, roll_animation::RollAnimation};
 
-impl App {
-    pub(super) fn render_game(&self, frame: &mut ratatui::Frame) {
-        let main_area = self.vertical_layout(frame, self.roll_hint());
+// Shared by GamePhase::Rolling and GamePhase::Boss, which behave identically.
+pub(super) struct RollingPhase;
+
+impl Phase for RollingPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        let main_area = app.vertical_layout(frame, roll_hint(app));
 
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
                 .areas(main_area);
 
-        frame.render_widget(self.dice_widget(), left_area);
-        frame.render_widget(self.score_view_widget(), right_area);
+        frame.render_widget(app.dice_widget(), left_area);
+        frame.render_widget(app.score_view_widget(), right_area);
     }
 
-    pub(super) fn handle_rolling(&mut self, code: KeyCode) -> bool {
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
         if is_quit(code) {
             return false;
         }
         match (
-            self.state.dice_pool.max_rolls != self.state.dice_pool.rolls_remaining,
+            app.state.dice_pool.max_rolls != app.state.dice_pool.rolls_remaining,
             code,
         ) {
             (true, KeyCode::Right) => {
-                self.state.dice_pool.next_die();
+                app.state.dice_pool.next_die();
                 true
             }
             (true, KeyCode::Left) => {
-                self.state.dice_pool.prev_die();
+                app.state.dice_pool.prev_die();
                 true
             }
             (true, KeyCode::Char(' ')) => {
-                self.state.dice_pool.toggle_selected();
+                app.state.dice_pool.toggle_selected();
                 true
             }
             (_, KeyCode::Char('r') | KeyCode::Char('R')) => {
-                if self.state.roll() {
+                if app.state.roll() {
                     // Roll committed; start display animation.
-                    self.roll_animation =
-                        Some(RollAnimation::new(&self.state.dice_pool, &mut self.rng));
+                    app.roll_animation =
+                        Some(RollAnimation::new(&app.state.dice_pool, &mut app.rng));
                 }
                 true
             }
             (true, KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter) => {
-                self.state.begin_scoring();
+                app.state.begin_scoring();
                 true
             }
             _ => true,
         }
     }
+}
 
-    fn roll_hint(&self) -> &'static str {
-        if self.state.dice_pool.rolls_remaining == self.state.dice_pool.max_rolls {
-            "[R] Roll  [Q] Quit"
-        } else {
-            "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
-        }
+fn roll_hint(app: &App) -> &'static str {
+    if app.state.dice_pool.rolls_remaining == app.state.dice_pool.max_rolls {
+        "[R] Roll  [Q] Quit"
+    } else {
+        "[<Arrow Keys>] Select Die  [<Space>] Hold  [R] Roll  [S] Score  [Q] Quit"
     }
 }

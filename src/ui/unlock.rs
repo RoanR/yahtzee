@@ -7,11 +7,13 @@ use ratatui::widgets::Paragraph;
 
 use crate::{game::GamePhase, scoring::ScoreCategory};
 
-use super::App;
+use super::{App, Phase};
 
-impl App {
-    pub(super) fn render_unlock(&self, frame: &mut ratatui::Frame) {
-        let text = match &self.unlock_options {
+pub(super) struct CategoryUnlockPhase;
+
+impl Phase for CategoryUnlockPhase {
+    fn render(&self, app: &App, frame: &mut ratatui::Frame) {
+        let text = match &app.unlock_options {
             Some(options) => format!(
                 "BOSS DEFEATED! Choose a new scoring category:\n\n[1] {}\n[2] {}",
                 options[0], options[1]
@@ -21,30 +23,32 @@ impl App {
         frame.render_widget(Paragraph::new(text), frame.area());
     }
 
-    pub(super) fn handle_unlock(&mut self, code: KeyCode) -> bool {
-        if self.unlock_options.is_none() {
+    fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
+        if app.unlock_options.is_none() {
             // All categories already unlocked: any key descends.
-            self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
+            app.state.descend(&mut app.rng);
+            app.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
             return true;
         }
 
-        let chosen = match (code, &self.unlock_options) {
+        let chosen = match (code, &app.unlock_options) {
             (KeyCode::Char('1'), Some(opts)) => Some(opts[0].clone()),
             (KeyCode::Char('2'), Some(opts)) => Some(opts[1].clone()),
             _ => return true,
         };
 
         if let Some(cat) = chosen {
-            self.state.unlock_category(cat);
-            self.unlock_options = None;
-            self.state.descend(&mut self.rng);
-            self.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
+            app.state.unlock_category(cat);
+            app.unlock_options = None;
+            app.state.descend(&mut app.rng);
+            app.state.phase = GamePhase::ChoosingRoom { cursor: 0 };
         }
 
         true
     }
+}
 
+impl App {
     // Pick two unique categories from those not yet unlocked. Returns None when
     // fewer than two remain (all categories have been unlocked).
     pub(super) fn pick_unlock_options(&mut self) -> Option<[ScoreCategory; 2]> {
