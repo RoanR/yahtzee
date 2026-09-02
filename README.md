@@ -174,8 +174,8 @@ Requires Rust 2024 edition. Install via [rustup.rs](https://rustup.rs).
 
 ## Implementation Status
 
-- [ ] Phase 1: Core dice engine (`dice.rs`, `scoring.rs`)
-- [ ] Phase 2: Dice upgrade system & relics (`relics.rs`)
-- [ ] Phase 3: Dungeon system (`dungeon/`)
-- [ ] Phase 4: TUI & game loop (`ui/`, `game.rs`)
-- [ ] Phase 5: Floor progression & polish
+- [x] Phase 1: Core dice engine (`dice.rs`, `scoring.rs`)
+- [x] Phase 2: Dice upgrade system & relics (`relics.rs`)
+- [x] Phase 3: Dungeon system (`dungeon/`)
+- [x] Phase 4: TUI & game loop (`ui/`, `game.rs`)
+- [ ] Phase 5: Floor progression & polish — meta-progression, characters, and a home menu are still outstanding
