@@ -43,7 +43,7 @@ Shop isn't a room you pick — it opens automatically after any successful Score
 
 ## Scoring Categories
 
-After your final roll, the game evaluates your dice against every unlocked category and applies the highest-scoring result. New categories are unlocked by defeating floor bosses, progressively increasing the ceiling of what a roll can score.
+After your final roll, the game evaluates your dice against every unlocked category and applies the highest-scoring result. Defeating a boss offers a choice of 2 random still-locked categories, and you pick one to unlock — it's not a fixed floor-to-category schedule, so runs unlock categories in a different order each time.
 
 Each category can only be matched once per room — so if your dice already scored Full House this room, the game won't score it again; it moves on to the next best option.
 
