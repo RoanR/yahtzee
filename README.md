@@ -151,11 +151,12 @@ Between runs, spend **Dungeon Coins** (earned based on floors cleared) to upgrad
 
 ## Controls
 
-| Key    | Action                              |
-|--------|-------------------------------------|
-| 1–5    | Hold / unhold that die              |
-| R      | Roll all unheld dice                |
-| Q      | Quit to menu                        |
+| Key         | Action                              |
+|-------------|--------------------------------------|
+| ← / →       | Move selection between dice          |
+| Space       | Hold / unhold the selected die       |
+| R           | Roll all unheld dice                 |
+| Q           | Quit the app (no menu exists yet)    |
 
 ---
 
