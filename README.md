@@ -22,7 +22,7 @@ Each run starts with:
 - **5 standard d6**, **3 rolls** per room
 - **30 HP**
 - **0 gold**
-- Only the **Chance** category unlocked
+- Only the **Chance** and **Highest Die** categories unlocked
 
 ---
 
