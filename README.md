@@ -114,14 +114,15 @@ Passive items that persist for the entire run. Found in shops and elite rooms.
 |------------------------|-----------------------------------------------------------------------|
 | Loaded Dice            | Your first roll each turn rerolls any die showing 1 once for free    |
 | Extra Die Slot         | Add a 6th die slot; fill it with any die you own                    |
-| One More Chance        | Gain +1 roll per room (4 rolls total)                                 |
+| One More Roll          | Gain +1 roll per room (4 rolls total)                                 |
 | Lucky Horseshoe        | Failing a target costs only 5 HP instead of 10                       |
 | Goblin's Hoard         | Earn +15 bonus gold when you beat a target by 150%+                  |
 | Cursed Chalice         | -10 max HP, but all shop prices are 20% cheaper                      |
 | Enchanted Quill        | Once per floor, the best category can be scored again even if already used |
 | Shield of the Ancients | The first time you'd lose HP each floor, negate the damage            |
 | Wizard's Grimoire      | Once per floor, preview what your next roll will be before committing |
-| Dice Hoarder           | Start each floor with one extra die drawn from a pool of your spares  |
+
+Dice Hoarder is documented in earlier drafts but not yet implemented in `relics::all_relics()`.
 
 ---
 
