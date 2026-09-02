@@ -22,40 +22,40 @@ Each run starts with:
 - **5 standard d6**, **3 rolls** per room
 - **30 HP**
 - **0 gold**
-- Only the **Chance** category unlocked
+- Only the **Chance** and **Highest Die** categories unlocked
 
 ---
 
 ## Floor Structure
 
-Each floor has **3 rooms** followed by a **boss room**:
+Each floor offers **5 room choices** (picked from branching pairs) followed by a **boss room**:
 
 | Room Type       | Description                                                              |
 |-----------------|--------------------------------------------------------------------------|
 | Score Challenge | Roll to beat a target score. Earn 25 gold on success, lose 10 HP on fail |
 | Elite           | Harder target, optional. Better gold reward + chance of rare relic       |
-| Shop            | Spend gold on relics (40–80g), special dice (50–100g), die upgrades (30g)|
 | Rest / Campfire | Choose: restore 15 HP **or** upgrade one die in your pool                |
 | Boss            | Multi-round fight with unique weakness + debuff. Unlock a new category   |
+
+Shop isn't a room you pick — it opens automatically after any successful Score Challenge or Elite room, offering relics (40–80g), special dice (50–100g), and die upgrades (30g).
 
 ---
 
 ## Scoring Categories
 
-After your final roll, the game evaluates your dice against every unlocked category and applies the highest-scoring result. New categories are unlocked by defeating floor bosses, progressively increasing the ceiling of what a roll can score.
+After your final roll, the game evaluates your dice against every unlocked category and applies the highest-scoring result. Defeating a boss offers a choice of 2 random still-locked categories, and you pick one to unlock — it's not a fixed floor-to-category schedule, so runs unlock categories in a different order each time.
 
 Each category can only be matched once per room — so if your dice already scored Full House this room, the game won't score it again; it moves on to the next best option.
 
-| Category        | Unlocked At    | Score Rule                                                |
-|-----------------|----------------|-----------------------------------------------------------|
-| Chance          | Start          | Sum of all dice                                           |
-| Upper Section   | Floor 1 Boss   | Sum of all dice showing the best single face              |
-| Three of a Kind | Floor 2 Boss   | Sum of all dice if 3+ match                               |
-| Four of a Kind  | Floor 2 Boss   | Sum of all dice if 4+ match                               |
-| Full House      | Floor 3 Boss   | 25 pts + sum of matched dice (three of one, two of another)|
-| Small Straight  | Floor 4 Boss   | 30 pts + sum (4 sequential dice)                          |
-| Large Straight  | Floor 4 Boss   | 40 pts + sum (5 sequential dice)                          |
-| Yahtzee         | Floor 5 Boss   | 100 pts + sum of all dice (all five the same)             |
+| Category                | Unlocked At | Score Rule                                                  |
+|-------------------------|-------------|--------------------------------------------------------------|
+| Highest Die             | Start       | Value of the single highest die                              |
+| Chance                  | Start       | Sum of all dice                                               |
+| Ones / Twos / .../ Sixes| Boss reward | Sum of matching dice; +10 bonus at 3+ matches, +15 at 4+      |
+| Full House              | Boss reward | 25 pts + sum of matched dice (three of one, two of another)   |
+| Small Straight          | Boss reward | 30 pts + sum (4 sequential dice)                              |
+| Large Straight          | Boss reward | 40 pts + sum (5 sequential dice)                              |
+| Yahtzee                 | Boss reward | 100 pts + sum of all dice (all five the same)                 |
 
 ---
 
@@ -65,10 +65,10 @@ Each boss applies a **debuff** at the start of the fight and has a **weakness ca
 
 | Floor | Boss         | Weakness        | Debuff                                          |
 |-------|--------------|-----------------|-------------------------------------------------|
-| 1     | Rat King     | Pair            | One die always shows 1 at the start of each roll |
-| 2     | Stone Golem  | Upper Section   | Each 1 rolled costs 2 extra HP                  |
+| 1     | Rat King     | Chance          | One die always shows 1 at the start of each roll |
+| 2     | Stone Golem  | Sixes           | Each 1 rolled costs 2 extra HP                  |
 | 3     | Goblin King  | Full House      | Only 2 rolls per attempt instead of 3           |
-| 4     | Dark Wizard  | Straight        | One randomly selected die is locked each roll   |
+| 4     | Dark Wizard  | Small Straight  | One randomly selected die is locked each roll   |
 | 5     | The Dragon   | Yahtzee         | Target is doubled; scoring Yahtzee heals 15 HP  |
 
 ---
@@ -114,14 +114,15 @@ Passive items that persist for the entire run. Found in shops and elite rooms.
 |------------------------|-----------------------------------------------------------------------|
 | Loaded Dice            | Your first roll each turn rerolls any die showing 1 once for free    |
 | Extra Die Slot         | Add a 6th die slot; fill it with any die you own                    |
-| One More Chance        | Gain +1 roll per room (4 rolls total)                                 |
+| One More Roll          | Gain +1 roll per room (4 rolls total)                                 |
 | Lucky Horseshoe        | Failing a target costs only 5 HP instead of 10                       |
 | Goblin's Hoard         | Earn +15 bonus gold when you beat a target by 150%+                  |
 | Cursed Chalice         | -10 max HP, but all shop prices are 20% cheaper                      |
 | Enchanted Quill        | Once per floor, the best category can be scored again even if already used |
 | Shield of the Ancients | The first time you'd lose HP each floor, negate the damage            |
 | Wizard's Grimoire      | Once per floor, preview what your next roll will be before committing |
-| Dice Hoarder           | Start each floor with one extra die drawn from a pool of your spares  |
+
+Dice Hoarder is documented in earlier drafts but not yet implemented in `relics::all_relics()`.
 
 ---
 
@@ -151,11 +152,12 @@ Between runs, spend **Dungeon Coins** (earned based on floors cleared) to upgrad
 
 ## Controls
 
-| Key    | Action                              |
-|--------|-------------------------------------|
-| 1–5    | Hold / unhold that die              |
-| R      | Roll all unheld dice                |
-| Q      | Quit to menu                        |
+| Key         | Action                              |
+|-------------|--------------------------------------|
+| ← / →       | Move selection between dice          |
+| Space       | Hold / unhold the selected die       |
+| R           | Roll all unheld dice                 |
+| Q           | Quit the app (no menu exists yet)    |
 
 ---
 
@@ -172,8 +174,8 @@ Requires Rust 2024 edition. Install via [rustup.rs](https://rustup.rs).
 
 ## Implementation Status
 
-- [ ] Phase 1: Core dice engine (`dice.rs`, `scoring.rs`)
-- [ ] Phase 2: Dice upgrade system & relics (`relics.rs`)
-- [ ] Phase 3: Dungeon system (`dungeon/`)
-- [ ] Phase 4: TUI & game loop (`ui/`, `game.rs`)
-- [ ] Phase 5: Floor progression & polish
+- [x] Phase 1: Core dice engine (`dice.rs`, `scoring.rs`)
+- [x] Phase 2: Dice upgrade system & relics (`relics.rs`)
+- [x] Phase 3: Dungeon system (`dungeon/`)
+- [x] Phase 4: TUI & game loop (`ui/`, `game.rs`)
+- [ ] Phase 5: Floor progression & polish — meta-progression, characters, and a home menu are still outstanding
