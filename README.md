@@ -34,9 +34,10 @@ Each floor offers **5 room choices** (picked from branching pairs) followed by a
 |-----------------|--------------------------------------------------------------------------|
 | Score Challenge | Roll to beat a target score. Earn 25 gold on success, lose 10 HP on fail |
 | Elite           | Harder target, optional. Better gold reward + chance of rare relic       |
-| Shop            | Spend gold on relics (40–80g), special dice (50–100g), die upgrades (30g)|
 | Rest / Campfire | Choose: restore 15 HP **or** upgrade one die in your pool                |
 | Boss            | Multi-round fight with unique weakness + debuff. Unlock a new category   |
+
+Shop isn't a room you pick — it opens automatically after any successful Score Challenge or Elite room, offering relics (40–80g), special dice (50–100g), and die upgrades (30g).
 
 ---
 
