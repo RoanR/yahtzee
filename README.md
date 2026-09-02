@@ -47,16 +47,15 @@ After your final roll, the game evaluates your dice against every unlocked categ
 
 Each category can only be matched once per room — so if your dice already scored Full House this room, the game won't score it again; it moves on to the next best option.
 
-| Category        | Unlocked At    | Score Rule                                                |
-|-----------------|----------------|-----------------------------------------------------------|
-| Chance          | Start          | Sum of all dice                                           |
-| Upper Section   | Floor 1 Boss   | Sum of all dice showing the best single face              |
-| Three of a Kind | Floor 2 Boss   | Sum of all dice if 3+ match                               |
-| Four of a Kind  | Floor 2 Boss   | Sum of all dice if 4+ match                               |
-| Full House      | Floor 3 Boss   | 25 pts + sum of matched dice (three of one, two of another)|
-| Small Straight  | Floor 4 Boss   | 30 pts + sum (4 sequential dice)                          |
-| Large Straight  | Floor 4 Boss   | 40 pts + sum (5 sequential dice)                          |
-| Yahtzee         | Floor 5 Boss   | 100 pts + sum of all dice (all five the same)             |
+| Category                | Unlocked At | Score Rule                                                  |
+|-------------------------|-------------|--------------------------------------------------------------|
+| Highest Die             | Start       | Value of the single highest die                              |
+| Chance                  | Start       | Sum of all dice                                               |
+| Ones / Twos / .../ Sixes| Boss reward | Sum of matching dice; +10 bonus at 3+ matches, +15 at 4+      |
+| Full House              | Boss reward | 25 pts + sum of matched dice (three of one, two of another)   |
+| Small Straight          | Boss reward | 30 pts + sum (4 sequential dice)                              |
+| Large Straight          | Boss reward | 40 pts + sum (5 sequential dice)                              |
+| Yahtzee                 | Boss reward | 100 pts + sum of all dice (all five the same)                 |
 
 ---
 
