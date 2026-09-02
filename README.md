@@ -28,7 +28,7 @@ Each run starts with:
 
 ## Floor Structure
 
-Each floor has **3 rooms** followed by a **boss room**:
+Each floor offers **5 room choices** (picked from branching pairs) followed by a **boss room**:
 
 | Room Type       | Description                                                              |
 |-----------------|--------------------------------------------------------------------------|
