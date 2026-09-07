@@ -612,4 +612,82 @@ mod tests {
         pool.prev_die();
         assert_eq!(selected_index(&pool), Some(0));
     }
+
+    // values(): reflects each die's current face value, in pool order
+    #[test]
+    fn test_values() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 3);
+        pool.dice[0].current_value = DieFace::new(3);
+        pool.dice[1].current_value = DieFace::new(6);
+
+        assert_eq!(pool.values(), vec![3, 6]);
+    }
+
+    // enchant_bonus_total(): sums each die's current-face enchant bonus, 0 when unset
+    #[test]
+    fn test_enchant_bonus_total() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 3);
+        pool.dice[0].upgrade(DieUpgrade::Enchant {
+            face_index: 0,
+            bonus_score: 5,
+        });
+        pool.dice[0].current_value = pool.dice[0].faces()[0];
+        pool.dice[1].current_value = DieFace::new(4);
+
+        assert_eq!(pool.enchant_bonus_total(), 5);
+    }
+
+    // add_die()/remove_die(): add appends; remove returns the die and shrinks the pool;
+    // out-of-bounds remove is a no-op returning None
+    #[test]
+    fn test_add_and_remove_die() {
+        let mut pool = DicePool::with_dice(vec![Die::standard()], 3);
+
+        pool.add_die(Die::standard());
+        assert_eq!(pool.dice.len(), 2);
+
+        assert!(pool.remove_die(0).is_some());
+        assert_eq!(pool.dice.len(), 1);
+
+        assert!(pool.remove_die(99).is_none());
+        assert_eq!(pool.dice.len(), 1);
+    }
+
+    // has_standard_die(): true for a pool containing a Standard die
+    #[test]
+    fn test_has_standard_die() {
+        let pool = DicePool::new();
+        assert!(pool.has_standard_die());
+    }
+
+    // replace_first_standard_die(): replaces only the first Standard die in the pool
+    #[test]
+    fn test_replace_first_standard_die() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(); 3], 3);
+        let mut replacement = Die::standard();
+        replacement.upgrade(DieUpgrade::Reface);
+
+        assert!(pool.replace_first_standard_die(replacement));
+
+        assert_eq!(face_values(&pool.dice[0]), vec![6, 2, 3, 4, 5, 6]);
+        assert_eq!(face_values(&pool.dice[1]), vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(face_values(&pool.dice[2]), vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    // replace_die(index, die): valid index swaps in the new die and returns the old one;
+    // out-of-bounds returns None and leaves the pool unchanged
+    #[test]
+    fn test_replace_die() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 3);
+        let mut replacement = Die::standard();
+        replacement.upgrade(DieUpgrade::Reface);
+
+        let old = pool.replace_die(1, replacement);
+        assert!(old.is_some());
+        assert_eq!(face_values(&pool.dice[1]), vec![6, 2, 3, 4, 5, 6]);
+        assert_eq!(face_values(&pool.dice[0]), vec![1, 2, 3, 4, 5, 6]);
+
+        assert!(pool.replace_die(99, Die::standard()).is_none());
+        assert_eq!(pool.dice.len(), 2);
+    }
 }
