@@ -424,12 +424,15 @@ impl DicePool {
 mod tests {
     use super::*;
 
+    fn face_values(die: &Die) -> Vec<u8> {
+        die.faces().iter().map(DieFace::get_value).collect()
+    }
+
     // standard() (and Default): faces [1,2,3,4,5,6], "D6" label, starts showing 1
     #[test]
     fn test_standard_die_construction() {
         let die = Die::standard();
-        let values: Vec<u8> = die.faces().iter().map(DieFace::get_value).collect();
-        assert_eq!(values, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(face_values(&die), vec![1, 2, 3, 4, 5, 6]);
         assert_eq!(die.label(), "D6");
         assert_eq!(die.current_value.get_value(), 1);
         assert!(!die.held);
@@ -457,5 +460,44 @@ mod tests {
             assert!(die.faces().iter().any(|f| f.get_value() == value));
             assert_eq!(die.current_value.get_value(), value);
         }
+    }
+
+    // Reface: lowest face (index 0, value 1) becomes the highest value (6); rest untouched
+    #[test]
+    fn test_upgrade_reface() {
+        let mut die = Die::standard();
+        assert!(die.upgrade(DieUpgrade::Reface));
+        assert_eq!(face_values(&die), vec![6, 2, 3, 4, 5, 6]);
+    }
+
+    // Enchant: valid index sets that face's bonus; out-of-bounds leaves faces untouched
+    #[test]
+    fn test_upgrade_enchant() {
+        let mut die = Die::standard();
+        assert!(die.upgrade(DieUpgrade::Enchant {
+            face_index: 2,
+            bonus_score: 5,
+        }));
+        let enchants: Vec<Option<usize>> = die.faces().iter().map(|f| f.enchant).collect();
+        assert_eq!(enchants, vec![None, None, Some(5), None, None, None]);
+
+        let mut die = Die::standard();
+        assert!(!die.upgrade(DieUpgrade::Enchant {
+            face_index: 99,
+            bonus_score: 5,
+        }));
+        assert!(die.faces().iter().all(|f| f.enchant.is_none()));
+    }
+
+    // Augment: valid index increments that face's value; out-of-bounds leaves values untouched
+    #[test]
+    fn test_upgrade_augment() {
+        let mut die = Die::standard();
+        assert!(die.upgrade(DieUpgrade::Augment { face_index: 0 }));
+        assert_eq!(face_values(&die), vec![2, 2, 3, 4, 5, 6]);
+
+        let mut die = Die::standard();
+        assert!(!die.upgrade(DieUpgrade::Augment { face_index: 99 }));
+        assert_eq!(face_values(&die), vec![1, 2, 3, 4, 5, 6]);
     }
 }
