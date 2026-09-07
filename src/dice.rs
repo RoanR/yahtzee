@@ -500,4 +500,50 @@ mod tests {
         assert!(!die.upgrade(DieUpgrade::Augment { face_index: 99 }));
         assert_eq!(face_values(&die), vec![1, 2, 3, 4, 5, 6]);
     }
+
+    // new(): 5 standard dice, 3 rolls
+    #[test]
+    fn test_dice_pool_new() {
+        let pool = DicePool::new();
+        assert_eq!(pool.dice.len(), 5);
+        assert!(pool.dice.iter().all(|d| d.label() == "D6"));
+        assert_eq!(pool.max_rolls, 3);
+        assert_eq!(pool.rolls_remaining, 3);
+    }
+
+    // with_dice(): custom dice/max_rolls; rolls_remaining starts at max_rolls
+    #[test]
+    fn test_dice_pool_with_dice() {
+        let dice = vec![Die::standard(), Die::standard()];
+        let pool = DicePool::with_dice(dice, 5);
+        assert_eq!(pool.dice.len(), 2);
+        assert_eq!(pool.max_rolls, 5);
+        assert_eq!(pool.rolls_remaining, 5);
+    }
+
+    // roll_once(): false + no mutation at 0 rolls; true + decrement otherwise;
+    // held dice are skipped while non-held dice get a valid new face
+    #[test]
+    fn test_roll_once() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 1);
+        pool.dice[0].held = true;
+        pool.dice[0].current_value = DieFace::new(99);
+
+        assert!(pool.roll_once());
+        assert_eq!(pool.rolls_remaining, 0);
+        assert_eq!(pool.dice[0].current_value.get_value(), 99);
+        assert!(face_values(&pool.dice[1]).contains(&pool.dice[1].current_value.get_value()));
+
+        assert!(!pool.roll_once());
+        assert_eq!(pool.rolls_remaining, 0);
+    }
+
+    // can_roll(): true while rolls remain, false at 0
+    #[test]
+    fn test_can_roll() {
+        let mut pool = DicePool::with_dice(vec![Die::standard()], 1);
+        assert!(pool.can_roll());
+        pool.roll_once();
+        assert!(!pool.can_roll());
+    }
 }
