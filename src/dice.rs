@@ -419,3 +419,43 @@ impl DicePool {
         self.dice[next].selected = true;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // standard() (and Default): faces [1,2,3,4,5,6], "D6" label, starts showing 1
+    #[test]
+    fn test_standard_die_construction() {
+        let die = Die::standard();
+        let values: Vec<u8> = die.faces().iter().map(DieFace::get_value).collect();
+        assert_eq!(values, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(die.label(), "D6");
+        assert_eq!(die.current_value.get_value(), 1);
+        assert!(!die.held);
+        assert!(!die.selected);
+    }
+
+    // display_value: "W" for a WILD current face, else the numeric string
+    #[test]
+    fn test_display_value() {
+        let mut die = Die::standard();
+        die.current_value = DieFace::new(WILD);
+        assert_eq!(die.display_value(), "W");
+
+        die.current_value = DieFace::new(4);
+        assert_eq!(die.display_value(), "4");
+    }
+
+    // roll(): result is always one of the die's face values
+    #[test]
+    fn test_roll_produces_valid_face() {
+        let mut die = Die::standard();
+        let mut rng = rand::rng();
+        for _ in 0..50 {
+            let value = die.roll(&mut rng).get_value();
+            assert!(die.faces().iter().any(|f| f.get_value() == value));
+            assert_eq!(die.current_value.get_value(), value);
+        }
+    }
+}
