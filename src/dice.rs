@@ -546,4 +546,70 @@ mod tests {
         pool.roll_once();
         assert!(!pool.can_roll());
     }
+
+    fn selected_index(pool: &DicePool) -> Option<usize> {
+        pool.dice.iter().position(|d| d.selected)
+    }
+
+    // reset_for_room(): rolls_remaining restored to max_rolls, held/selected cleared
+    #[test]
+    fn test_reset_for_room() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 3);
+        pool.rolls_remaining = 0;
+        pool.dice[0].held = true;
+        pool.dice[1].selected = true;
+
+        pool.reset_for_room();
+
+        assert_eq!(pool.rolls_remaining, 3);
+        assert!(pool.dice.iter().all(|d| !d.held && !d.selected));
+    }
+
+    // toggle_hold(index): flips held twice back to original; out-of-bounds is a no-op
+    #[test]
+    fn test_toggle_hold() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 3);
+        assert!(pool.dice.iter().all(|d| !d.held));
+
+        pool.toggle_hold(0);
+        assert!(pool.dice[0].held);
+        pool.toggle_hold(0);
+        assert!(pool.dice.iter().all(|d| !d.held));
+
+        pool.toggle_hold(99);
+        assert!(pool.dice.iter().all(|d| !d.held));
+    }
+
+    // toggle_selected(): no-op with nothing selected; toggles held on the selected die
+    #[test]
+    fn test_toggle_selected() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(), Die::standard()], 3);
+        pool.toggle_selected();
+        assert!(pool.dice.iter().all(|d| !d.held));
+
+        pool.dice[1].selected = true;
+        pool.toggle_selected();
+        assert!(pool.dice[1].held);
+        assert!(!pool.dice[0].held);
+    }
+
+    // next_die()/prev_die(): start at index 0 from no selection, cycle and wrap in both
+    // directions, exactly one die selected at a time
+    #[test]
+    fn test_next_and_prev_die() {
+        let mut pool = DicePool::with_dice(vec![Die::standard(); 3], 3);
+
+        for expected in [0, 1, 2, 0] {
+            pool.next_die();
+            assert_eq!(selected_index(&pool), Some(expected));
+        }
+        assert_eq!(pool.dice.iter().filter(|d| d.selected).count(), 1);
+
+        pool.prev_die();
+        assert_eq!(selected_index(&pool), Some(2));
+
+        let mut pool = DicePool::with_dice(vec![Die::standard(); 3], 3);
+        pool.prev_die();
+        assert_eq!(selected_index(&pool), Some(0));
+    }
 }
