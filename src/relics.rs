@@ -397,4 +397,38 @@ mod tests {
         assert_eq!(relic.on_score(30, 20), 15);
         assert_eq!(relic.on_score(31, 20), 15);
     }
+
+    // EnchantedQuill: try_use() succeeds once per floor, refreshed by on_floor_start()
+    #[test]
+    fn test_enchanted_quill() {
+        let mut relic = EnchantedQuill::new();
+        assert!(relic.try_use());
+        assert!(!relic.try_use());
+
+        relic.on_floor_start();
+        assert!(relic.try_use());
+    }
+
+    // ShieldOfTheAncients: first HP loss each floor is negated, later ones pass through,
+    // refreshed by on_floor_start()
+    #[test]
+    fn test_shield_of_the_ancients() {
+        let mut relic = ShieldOfTheAncients::new();
+        assert_eq!(relic.on_hp_loss(8), 0);
+        assert_eq!(relic.on_hp_loss(8), 8);
+
+        relic.on_floor_start();
+        assert_eq!(relic.on_hp_loss(8), 0);
+    }
+
+    // WizardsGrimoire: try_use() succeeds once per floor, refreshed by on_floor_start()
+    #[test]
+    fn test_wizards_grimoire() {
+        let mut relic = WizardsGrimoire::new();
+        assert!(relic.try_use());
+        assert!(!relic.try_use());
+
+        relic.on_floor_start();
+        assert!(relic.try_use());
+    }
 }
