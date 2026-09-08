@@ -380,4 +380,21 @@ mod tests {
         assert_eq!(pool.dice.len(), before + 1);
         assert_eq!(pool.dice.last().unwrap().label(), "D6");
     }
+
+    // LuckyHorseshoe: HP loss capped at 5
+    #[test]
+    fn test_lucky_horseshoe() {
+        let mut relic = LuckyHorseshoe;
+        assert_eq!(relic.on_hp_loss(10), 5);
+        assert_eq!(relic.on_hp_loss(3), 3);
+    }
+
+    // GoblinsHoard: +15 gold at 150%+ of target, 0 below, boundary is inclusive
+    #[test]
+    fn test_goblins_hoard() {
+        let relic = GoblinsHoard;
+        assert_eq!(relic.on_score(29, 20), 0);
+        assert_eq!(relic.on_score(30, 20), 15);
+        assert_eq!(relic.on_score(31, 20), 15);
+    }
 }
