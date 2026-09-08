@@ -301,3 +301,51 @@ pub fn all_relics() -> Vec<Box<dyn Relic>> {
         }),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Minimal relic overriding nothing but the required name()/description(),
+    // used to exercise the trait's default hook implementations.
+    struct DummyRelic;
+
+    impl Relic for DummyRelic {
+        fn name(&self) -> &str {
+            "Dummy"
+        }
+        fn description(&self) -> &str {
+            "does nothing"
+        }
+    }
+
+    // Default hooks: HP loss passes through, no score/HP/price/roll modifiers,
+    // and the no-op hooks don't panic.
+    #[test]
+    fn test_relic_trait_defaults() {
+        let mut relic = DummyRelic;
+        assert_eq!(relic.on_hp_loss(7), 7);
+        assert_eq!(relic.on_score(10, 20), 0);
+        assert_eq!(relic.max_hp_modifier(), 0);
+        assert_eq!(relic.shop_price_multiplier(), 1.0);
+        assert_eq!(relic.extra_rolls(), 0);
+
+        relic.on_floor_start();
+        let mut pool = DicePool::new();
+        relic.on_roll_start(&mut pool, true);
+        relic.on_acquire(&mut pool);
+    }
+
+    // OneMoreRoll: flat +1 roll per room
+    #[test]
+    fn test_one_more_roll() {
+        assert_eq!(OneMoreRoll.extra_rolls(), 1);
+    }
+
+    // CursedChalice: -10 max HP, 20% cheaper shop prices
+    #[test]
+    fn test_cursed_chalice() {
+        assert_eq!(CursedChalice.max_hp_modifier(), -10);
+        assert_eq!(CursedChalice.shop_price_multiplier(), 0.8);
+    }
+}
