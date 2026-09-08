@@ -348,4 +348,36 @@ mod tests {
         assert_eq!(CursedChalice.max_hp_modifier(), -10);
         assert_eq!(CursedChalice.shop_price_multiplier(), 0.8);
     }
+
+    // LoadedDice: on the first roll, dice showing 1 are rerolled to a valid face;
+    // dice not showing 1 are untouched. On a later roll, nothing is rerolled.
+    #[test]
+    fn test_loaded_dice() {
+        let mut relic = LoadedDice;
+        let mut pool = DicePool::new();
+        // Standard die faces are [1,2,3,4,5,6]; index 0 shows 1, index 3 shows 4.
+        pool.dice[0].current_value = pool.dice[0].faces()[0];
+        pool.dice[1].current_value = pool.dice[1].faces()[3];
+
+        relic.on_roll_start(&mut pool, true);
+        assert!((1..=6).contains(&pool.dice[0].current_value.get_value()));
+        assert_eq!(pool.dice[1].current_value.get_value(), 4);
+
+        pool.dice[0].current_value = pool.dice[0].faces()[0];
+        relic.on_roll_start(&mut pool, false);
+        assert_eq!(pool.dice[0].current_value.get_value(), 1);
+    }
+
+    // ExtraDieSlot: adds one Standard d6 to the pool on acquire
+    #[test]
+    fn test_extra_die_slot() {
+        let relic = ExtraDieSlot;
+        let mut pool = DicePool::new();
+        let before = pool.dice.len();
+
+        relic.on_acquire(&mut pool);
+
+        assert_eq!(pool.dice.len(), before + 1);
+        assert_eq!(pool.dice.last().unwrap().label(), "D6");
+    }
 }
