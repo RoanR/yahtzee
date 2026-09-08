@@ -431,4 +431,16 @@ mod tests {
         relic.on_floor_start();
         assert!(relic.try_use());
     }
+
+    // all_relics(): exactly 9 relics, each with a unique name (shop filtering
+    // excludes owned relics by name, so duplicates would be a bug)
+    #[test]
+    fn test_all_relics() {
+        let relics = all_relics();
+        assert_eq!(relics.len(), 9);
+
+        let names: std::collections::HashSet<&str> =
+            relics.iter().map(|r| r.name()).collect();
+        assert_eq!(names.len(), relics.len());
+    }
 }
