@@ -301,3 +301,146 @@ pub fn all_relics() -> Vec<Box<dyn Relic>> {
         }),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Minimal relic overriding nothing but the required name()/description(),
+    // used to exercise the trait's default hook implementations.
+    struct DummyRelic;
+
+    impl Relic for DummyRelic {
+        fn name(&self) -> &str {
+            "Dummy"
+        }
+        fn description(&self) -> &str {
+            "does nothing"
+        }
+    }
+
+    // Default hooks: HP loss passes through, no score/HP/price/roll modifiers,
+    // and the no-op hooks don't panic.
+    #[test]
+    fn test_relic_trait_defaults() {
+        let mut relic = DummyRelic;
+        assert_eq!(relic.on_hp_loss(7), 7);
+        assert_eq!(relic.on_score(10, 20), 0);
+        assert_eq!(relic.max_hp_modifier(), 0);
+        assert_eq!(relic.shop_price_multiplier(), 1.0);
+        assert_eq!(relic.extra_rolls(), 0);
+
+        relic.on_floor_start();
+        let mut pool = DicePool::new();
+        relic.on_roll_start(&mut pool, true);
+        relic.on_acquire(&mut pool);
+    }
+
+    // OneMoreRoll: flat +1 roll per room
+    #[test]
+    fn test_one_more_roll() {
+        assert_eq!(OneMoreRoll.extra_rolls(), 1);
+    }
+
+    // CursedChalice: -10 max HP, 20% cheaper shop prices
+    #[test]
+    fn test_cursed_chalice() {
+        assert_eq!(CursedChalice.max_hp_modifier(), -10);
+        assert_eq!(CursedChalice.shop_price_multiplier(), 0.8);
+    }
+
+    // LoadedDice: on the first roll, dice showing 1 are rerolled to a valid face;
+    // dice not showing 1 are untouched. On a later roll, nothing is rerolled.
+    #[test]
+    fn test_loaded_dice() {
+        let mut relic = LoadedDice;
+        let mut pool = DicePool::new();
+        // Standard die faces are [1,2,3,4,5,6]; index 0 shows 1, index 3 shows 4.
+        pool.dice[0].current_value = pool.dice[0].faces()[0];
+        pool.dice[1].current_value = pool.dice[1].faces()[3];
+
+        relic.on_roll_start(&mut pool, true);
+        assert!((1..=6).contains(&pool.dice[0].current_value.get_value()));
+        assert_eq!(pool.dice[1].current_value.get_value(), 4);
+
+        pool.dice[0].current_value = pool.dice[0].faces()[0];
+        relic.on_roll_start(&mut pool, false);
+        assert_eq!(pool.dice[0].current_value.get_value(), 1);
+    }
+
+    // ExtraDieSlot: adds one Standard d6 to the pool on acquire
+    #[test]
+    fn test_extra_die_slot() {
+        let relic = ExtraDieSlot;
+        let mut pool = DicePool::new();
+        let before = pool.dice.len();
+
+        relic.on_acquire(&mut pool);
+
+        assert_eq!(pool.dice.len(), before + 1);
+        assert_eq!(pool.dice.last().unwrap().label(), "D6");
+    }
+
+    // LuckyHorseshoe: HP loss capped at 5
+    #[test]
+    fn test_lucky_horseshoe() {
+        let mut relic = LuckyHorseshoe;
+        assert_eq!(relic.on_hp_loss(10), 5);
+        assert_eq!(relic.on_hp_loss(3), 3);
+    }
+
+    // GoblinsHoard: +15 gold at 150%+ of target, 0 below, boundary is inclusive
+    #[test]
+    fn test_goblins_hoard() {
+        let relic = GoblinsHoard;
+        assert_eq!(relic.on_score(29, 20), 0);
+        assert_eq!(relic.on_score(30, 20), 15);
+        assert_eq!(relic.on_score(31, 20), 15);
+    }
+
+    // EnchantedQuill: try_use() succeeds once per floor, refreshed by on_floor_start()
+    #[test]
+    fn test_enchanted_quill() {
+        let mut relic = EnchantedQuill::new();
+        assert!(relic.try_use());
+        assert!(!relic.try_use());
+
+        relic.on_floor_start();
+        assert!(relic.try_use());
+    }
+
+    // ShieldOfTheAncients: first HP loss each floor is negated, later ones pass through,
+    // refreshed by on_floor_start()
+    #[test]
+    fn test_shield_of_the_ancients() {
+        let mut relic = ShieldOfTheAncients::new();
+        assert_eq!(relic.on_hp_loss(8), 0);
+        assert_eq!(relic.on_hp_loss(8), 8);
+
+        relic.on_floor_start();
+        assert_eq!(relic.on_hp_loss(8), 0);
+    }
+
+    // WizardsGrimoire: try_use() succeeds once per floor, refreshed by on_floor_start()
+    #[test]
+    fn test_wizards_grimoire() {
+        let mut relic = WizardsGrimoire::new();
+        assert!(relic.try_use());
+        assert!(!relic.try_use());
+
+        relic.on_floor_start();
+        assert!(relic.try_use());
+    }
+
+    // all_relics(): exactly 9 relics, each with a unique name (shop filtering
+    // excludes owned relics by name, so duplicates would be a bug)
+    #[test]
+    fn test_all_relics() {
+        let relics = all_relics();
+        assert_eq!(relics.len(), 9);
+
+        let names: std::collections::HashSet<&str> =
+            relics.iter().map(|r| r.name()).collect();
+        assert_eq!(names.len(), relics.len());
+    }
+}
