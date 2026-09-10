@@ -12,8 +12,6 @@
 // Room weights (3 rooms per floor):
 //   55% Challenge, 20% Elite, 25% Rest
 
-use std::arch::x86_64::_mm256_min_pd;
-
 use rand::Rng;
 
 use crate::scoring::ScoreCategory;
@@ -140,6 +138,8 @@ pub fn generate_floor(floor_num: usize, rng: &mut impl Rng) -> Floor {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     fn check_st(&st: &ScoreTarget, req_cur: u32, g: u32) {
