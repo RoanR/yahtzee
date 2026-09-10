@@ -10,7 +10,7 @@ use crate::scoring::ScoreCategory;
 
 // ─── ScoreTarget ──────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScoreTarget {
     pub required: u32,
     pub reward_gold: u32,
@@ -19,6 +19,7 @@ pub struct ScoreTarget {
 
 // ─── Debuff ───────────────────────────────────────────────────────────────────
 
+#[derive(Debug, PartialEq)]
 pub enum Debuff {
     // One die in the pool always shows 1 at the start of each roll.
     OneDieForcedOne,
@@ -34,6 +35,7 @@ pub enum Debuff {
 
 // ─── BossRoom ─────────────────────────────────────────────────────────────────
 
+#[derive(Debug, PartialEq)]
 pub struct BossRoom {
     pub name: &'static str,
     pub target: ScoreTarget,

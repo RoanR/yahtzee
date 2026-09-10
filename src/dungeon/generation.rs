@@ -193,4 +193,55 @@ mod tests {
         boss = boss_target(usize::MAX);
         check_st(&boss, base_target(usize::MAX, 5).saturating_mul(2), 0);
     }
+
+    // boss_for_floor(): floors 1-5 map to their hardcoded name/weakness/debuff,
+    // each with the correct boss_target() for that floor
+    #[test]
+    fn test_boss_for_floor() {
+        assert_eq!(
+            boss_for_floor(1),
+            BossRoom {
+                name: "Rat King",
+                target: boss_target(1),
+                weakness: ScoreCategory::Chance,
+                debuff: Debuff::OneDieForcedOne,
+            }
+        );
+        assert_eq!(
+            boss_for_floor(2),
+            BossRoom {
+                name: "Stone Golem",
+                target: boss_target(2),
+                weakness: ScoreCategory::Sixes,
+                debuff: Debuff::ExtraHpPerOne(2),
+            }
+        );
+        assert_eq!(
+            boss_for_floor(3),
+            BossRoom {
+                name: "Goblin King",
+                target: boss_target(3),
+                weakness: ScoreCategory::FullHouse,
+                debuff: Debuff::ReducedRolls(2),
+            }
+        );
+        assert_eq!(
+            boss_for_floor(4),
+            BossRoom {
+                name: "Dark Wizard",
+                target: boss_target(4),
+                weakness: ScoreCategory::SmallStraight,
+                debuff: Debuff::LockedDie,
+            }
+        );
+        assert_eq!(
+            boss_for_floor(5),
+            BossRoom {
+                name: "The Dragon",
+                target: boss_target(5),
+                weakness: ScoreCategory::Yahtzee,
+                debuff: Debuff::DoubleTarget,
+            }
+        );
+    }
 }
