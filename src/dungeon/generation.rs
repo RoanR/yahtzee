@@ -244,4 +244,47 @@ mod tests {
             }
         );
     }
+
+    // random_room(): distribution roughly matches the documented 55/20/25 weights,
+    // and Challenge/Elite carry the correct target for their floor/room
+    #[test]
+    fn test_random_room_distribution() {
+        let mut rng = rand::rng();
+        let mut counts: HashMap<&str, u32> = HashMap::new();
+        let trials = 10_000;
+
+        for _ in 0..trials {
+            let key = match random_room(2, 1, &mut rng) {
+                Room::Challenge(t) => {
+                    assert_eq!(t, challenge_target(2, 1));
+                    "challenge"
+                }
+                Room::Elite(t) => {
+                    assert_eq!(t, elite_target(2, 1));
+                    "elite"
+                }
+                Room::Rest => "rest",
+            };
+            *counts.entry(key).or_insert(0) += 1;
+        }
+
+        let pct = |key| *counts.get(key).unwrap_or(&0) as f64 / trials as f64;
+        assert!((pct("challenge") - 0.55).abs() < 0.05, "{:?}", counts);
+        assert!((pct("elite") - 0.20).abs() < 0.05, "{:?}", counts);
+        assert!((pct("rest") - 0.25).abs() < 0.05, "{:?}", counts);
+    }
+
+    // generate_floor(): 5 room-choice pairs, no rooms taken yet, starts at step 0,
+    // boss matches boss_for_floor() for that floor
+    #[test]
+    fn test_generate_floor_layout() {
+        let mut rng = rand::rng();
+        let floor = generate_floor(3, &mut rng);
+
+        assert_eq!(floor.floor_num, 3);
+        assert_eq!(floor.room_choices.len(), 5);
+        assert!(floor.rooms_taken.is_empty());
+        assert_eq!(floor.step, 0);
+        assert_eq!(floor.boss, boss_for_floor(3));
+    }
 }
