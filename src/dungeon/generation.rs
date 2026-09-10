@@ -12,6 +12,8 @@
 // Room weights (3 rooms per floor):
 //   55% Challenge, 20% Elite, 25% Rest
 
+use std::arch::x86_64::_mm256_min_pd;
+
 use rand::Rng;
 
 use crate::scoring::ScoreCategory;
@@ -25,7 +27,10 @@ use super::{
 
 // Base score target for a given floor number (1-indexed).
 fn base_target(floor_num: usize, room_num: usize) -> u32 {
-    ((floor_num * 10) + (floor_num * room_num)) as u32
+    let ret = floor_num
+        .saturating_mul(10)
+        .saturating_add(floor_num.saturating_mul(room_num)) as u32;
+    if ret > 1 { ret } else { 1 }
 }
 
 fn challenge_target(floor_num: usize, room_num: usize) -> ScoreTarget {
@@ -38,7 +43,7 @@ fn challenge_target(floor_num: usize, room_num: usize) -> ScoreTarget {
 }
 
 fn elite_target(floor_num: usize, room_num: usize) -> ScoreTarget {
-    let target = base_target(floor_num, room_num) * 3 / 2;
+    let target = base_target(floor_num, room_num).saturating_mul(3 / 2);
     ScoreTarget {
         required: target,
         current: target,
@@ -47,7 +52,7 @@ fn elite_target(floor_num: usize, room_num: usize) -> ScoreTarget {
 }
 
 fn boss_target(floor_num: usize) -> ScoreTarget {
-    let target = base_target(floor_num, 5) * 2;
+    let target = base_target(floor_num, 5).saturating_mul(2);
     ScoreTarget {
         required: target,
         current: target,
@@ -130,5 +135,62 @@ pub fn generate_floor(floor_num: usize, rng: &mut impl Rng) -> Floor {
         rooms_taken: vec![],
         boss,
         step: 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn check_st(&st: &ScoreTarget, req_cur: u32, g: u32) {
+        assert_eq!(st.required, req_cur);
+        assert_eq!(st.current, req_cur);
+        assert_eq!(st.reward_gold, g);
+    }
+
+    // Base target is computed correctly
+    #[test]
+    fn test_base_target() {
+        assert_eq!(base_target(1, 2), 12);
+        assert_eq!(base_target(1, 1), 11);
+        assert_eq!(base_target(1, 0), 10);
+
+        // Should have a minimum of 1
+        assert_eq!(base_target(0, 0), 1);
+
+        // Should have a maximum of u32::max
+        assert_eq!(base_target(usize::MAX, usize::MAX), u32::MAX);
+    }
+
+    // Challenge targets are computed correctly
+    #[test]
+    fn test_challenge_target() {
+        let mut challenge = challenge_target(1, 2);
+        check_st(&challenge, base_target(1, 2), 25);
+        challenge = challenge_target(usize::MAX, usize::MAX);
+        check_st(&challenge, base_target(usize::MAX, usize::MAX), 25);
+    }
+
+    // Elite targets are computed correctly
+    #[test]
+    fn test_elite_target() {
+        let mut elite = elite_target(1, 2);
+        check_st(&elite, base_target(1, 2).saturating_mul(3 / 2), 50);
+
+        elite = elite_target(usize::MAX, usize::MAX);
+        check_st(
+            &elite,
+            base_target(usize::MAX, usize::MAX).saturating_mul(3 / 2),
+            50,
+        );
+    }
+
+    // Boss targets are computed correctly
+    #[test]
+    fn test_boss_target() {
+        let mut boss = boss_target(1);
+        check_st(&boss, base_target(1, 5).saturating_mul(2), 0);
+        boss = boss_target(usize::MAX);
+        check_st(&boss, base_target(usize::MAX, 5).saturating_mul(2), 0);
     }
 }
