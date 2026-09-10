@@ -10,6 +10,7 @@ use crate::scoring::ScoreCategory;
 
 // ─── ScoreTarget ──────────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScoreTarget {
     pub required: u32,
     pub reward_gold: u32,
@@ -18,6 +19,7 @@ pub struct ScoreTarget {
 
 // ─── Debuff ───────────────────────────────────────────────────────────────────
 
+#[derive(Debug, PartialEq)]
 pub enum Debuff {
     // One die in the pool always shows 1 at the start of each roll.
     OneDieForcedOne,
@@ -33,6 +35,7 @@ pub enum Debuff {
 
 // ─── BossRoom ─────────────────────────────────────────────────────────────────
 
+#[derive(Debug, PartialEq)]
 pub struct BossRoom {
     pub name: &'static str,
     pub target: ScoreTarget,
@@ -66,5 +69,46 @@ impl Room {
             Room::Challenge(t) | Room::Elite(t) => t.reward_gold,
             Room::Rest => 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Short form print for a Room
+    #[test]
+    fn test_short_form() {
+        let score_t = ScoreTarget {
+            current: 0,
+            required: 20,
+            reward_gold: 10,
+        };
+
+        let challenge = Room::Challenge(score_t);
+        let elite = Room::Elite(score_t);
+        let rest = Room::Rest;
+
+        assert_eq!(challenge.short_form(), "C");
+        assert_eq!(elite.short_form(), "E");
+        assert_eq!(rest.short_form(), "R");
+    }
+
+    // Reward gold for a Room
+    #[test]
+    fn test_reward_gold() {
+        let score_t = ScoreTarget {
+            current: 0,
+            required: 20,
+            reward_gold: 10,
+        };
+
+        let challenge = Room::Challenge(score_t);
+        let elite = Room::Elite(score_t);
+        let rest = Room::Rest;
+
+        assert_eq!(challenge.reward_gold(), 10);
+        assert_eq!(elite.reward_gold(), 10);
+        assert_eq!(rest.reward_gold(), 0);
     }
 }
