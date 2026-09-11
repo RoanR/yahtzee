@@ -96,3 +96,95 @@ impl Dungeon {
         self.current_floor += 1;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scoring::ScoreCategory;
+
+    fn test_target() -> room::ScoreTarget {
+        room::ScoreTarget {
+            required: 10,
+            reward_gold: 5,
+            current: 10,
+        }
+    }
+
+    // A 2-step floor for deterministic Floor-navigation tests (no RNG involved).
+    fn test_floor() -> Floor {
+        Floor {
+            floor_num: 1,
+            room_choices: vec![
+                [Room::Challenge(test_target()), Room::Rest],
+                [Room::Rest, Room::Elite(test_target())],
+            ],
+            rooms_taken: vec![],
+            boss: BossRoom {
+                name: "Test Boss",
+                target: test_target(),
+                weakness: ScoreCategory::Chance,
+                debuff: room::Debuff::OneDieForcedOne,
+            },
+            step: 0,
+        }
+    }
+
+    // current_room()/current_room_mut(): None until a choice is made for the
+    // current step, then Some(the chosen option)
+    #[test]
+    fn test_current_room() {
+        let mut floor = test_floor();
+        assert!(floor.current_room().is_none());
+        assert!(floor.current_room_mut().is_none());
+
+        floor.choose(1);
+        assert!(matches!(floor.current_room(), Some(Room::Rest)));
+        assert!(matches!(floor.current_room_mut(), Some(Room::Rest)));
+    }
+
+    // advance(): increments step and returns true while step <= room_choices.len();
+    // false once step has moved past that
+    #[test]
+    fn test_advance() {
+        let mut floor = test_floor();
+        assert!(floor.advance()); // 0 -> 1
+        assert!(floor.advance()); // 1 -> 2 (== room_choices.len(), boss step)
+        assert!(floor.advance()); // 2 -> 3
+        assert_eq!(floor.step, 3);
+
+        assert!(!floor.advance());
+        assert_eq!(floor.step, 3);
+    }
+
+    // boss_next(): true exactly when step == room_choices.len()
+    #[test]
+    fn test_boss_next() {
+        let mut floor = test_floor();
+        assert!(!floor.boss_next());
+
+        floor.step = floor.room_choices.len();
+        assert!(floor.boss_next());
+
+        floor.step += 1;
+        assert!(!floor.boss_next());
+    }
+
+    // choose(): appends the chosen index to rooms_taken
+    #[test]
+    fn test_choose() {
+        let mut floor = test_floor();
+        floor.choose(0);
+        floor.choose(1);
+        assert_eq!(floor.rooms_taken, vec![0, 1]);
+    }
+
+    // next_options(): Some(pair) for the current step, None once boss is next
+    #[test]
+    fn test_next_options() {
+        let mut floor = test_floor();
+        assert!(floor.next_options().is_some());
+
+        floor.step = floor.room_choices.len();
+        assert!(floor.next_options().is_none());
+    }
+}
