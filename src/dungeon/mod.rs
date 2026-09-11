@@ -187,4 +187,42 @@ mod tests {
         floor.step = floor.room_choices.len();
         assert!(floor.next_options().is_none());
     }
+
+    // Dungeon::new(): generates exactly floor 1, nothing further
+    #[test]
+    fn test_dungeon_new() {
+        let mut rng = rand::rng();
+        let dungeon = Dungeon::new(&mut rng);
+
+        assert_eq!(dungeon.floors.len(), 1);
+        assert_eq!(dungeon.current_floor, 0);
+        assert_eq!(dungeon.current_floor().floor_num, 1);
+    }
+
+    // current_floor_mut(): mutation is visible through current_floor()
+    #[test]
+    fn test_current_floor_mut() {
+        let mut rng = rand::rng();
+        let mut dungeon = Dungeon::new(&mut rng);
+
+        dungeon.current_floor_mut().step = 2;
+        assert_eq!(dungeon.current_floor().step, 2);
+    }
+
+    // descend(): lazily appends exactly one new floor and advances current_floor
+    #[test]
+    fn test_descend() {
+        let mut rng = rand::rng();
+        let mut dungeon = Dungeon::new(&mut rng);
+
+        dungeon.descend(&mut rng);
+        assert_eq!(dungeon.floors.len(), 2);
+        assert_eq!(dungeon.current_floor, 1);
+        assert_eq!(dungeon.current_floor().floor_num, 2);
+
+        dungeon.descend(&mut rng);
+        assert_eq!(dungeon.floors.len(), 3);
+        assert_eq!(dungeon.current_floor, 2);
+        assert_eq!(dungeon.current_floor().floor_num, 3);
+    }
 }
