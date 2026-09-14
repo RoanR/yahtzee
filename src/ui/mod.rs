@@ -20,6 +20,7 @@
 pub mod dice_view;
 pub mod dungeon_view;
 pub mod game_over;
+pub mod main_menu;
 pub mod rest;
 pub mod roll_animation;
 pub mod rolling;
@@ -58,6 +59,17 @@ fn is_quit(code: KeyCode) -> bool {
     matches!(code, KeyCode::Char('q') | KeyCode::Char('Q'))
 }
 
+// Wrap a cursor by one step over a list of length `len`. Shared by every
+// phase's Up/Down handling (main_menu, and handle_rest_shop below) so the
+// wraparound arithmetic lives in one place.
+fn wrap_cursor(cursor: usize, len: usize, forward: bool) -> usize {
+    if forward {
+        (cursor + 1) % len
+    } else {
+        (cursor + len - 1) % len
+    }
+}
+
 // A GamePhase, as a self-contained state that knows how to render itself and
 // handle its own input. Built fresh from GameState::phase each time it's
 // needed (see App::phase_view) rather than stored, so it owns whatever data
@@ -75,6 +87,7 @@ trait Phase {
 // per-frame heap allocation (App::render/handle_key build one of these on
 // every tick and every keypress).
 enum PhaseView {
+    MainMenu(main_menu::MainMenuPhase),
     Rolling(rolling::RollingPhase),
     Selecting(selecting::SelectingPhase),
     Scored(scored::ScoredPhase),
@@ -90,6 +103,7 @@ enum PhaseView {
 impl Phase for PhaseView {
     fn render(&self, app: &App, frame: &mut ratatui::Frame) {
         match self {
+            PhaseView::MainMenu(p) => p.render(app, frame),
             PhaseView::Rolling(p) => p.render(app, frame),
             PhaseView::Selecting(p) => p.render(app, frame),
             PhaseView::Scored(p) => p.render(app, frame),
@@ -105,6 +119,7 @@ impl Phase for PhaseView {
 
     fn handle_key(&self, app: &mut App, code: KeyCode) -> bool {
         match self {
+            PhaseView::MainMenu(p) => p.handle_key(app, code),
             PhaseView::Rolling(p) => p.handle_key(app, code),
             PhaseView::Selecting(p) => p.handle_key(app, code),
             PhaseView::Scored(p) => p.handle_key(app, code),
@@ -180,6 +195,9 @@ impl App {
     // The single place that maps the current GamePhase to its Phase struct.
     fn phase_view(&self) -> PhaseView {
         match &self.state.phase {
+            GamePhase::MainMenu { cursor } => {
+                PhaseView::MainMenu(main_menu::MainMenuPhase { cursor: *cursor })
+            }
             GamePhase::Rolling | GamePhase::Boss => PhaseView::Rolling(rolling::RollingPhase),
             GamePhase::SelectingCategory { cursor, .. } => {
                 PhaseView::Selecting(selecting::SelectingPhase { cursor: *cursor })
@@ -256,11 +274,11 @@ impl App {
         }
         match code {
             KeyCode::Up if len > 0 => {
-                self.state.phase.set_cursor((cursor + len - 1) % len);
+                self.state.phase.set_cursor(wrap_cursor(cursor, len, false));
                 true
             }
             KeyCode::Down if len > 0 => {
-                self.state.phase.set_cursor((cursor + 1) % len);
+                self.state.phase.set_cursor(wrap_cursor(cursor, len, true));
                 true
             }
             KeyCode::Char('l') | KeyCode::Char('L') | KeyCode::Esc => {
