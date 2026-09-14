@@ -31,6 +31,10 @@ pub enum UpgradeKind {
 
 // Tracks which screen/interaction mode the game is in.
 pub enum GamePhase {
+    // App entry point: title screen shown before a run starts.
+    MainMenu {
+        cursor: usize,
+    },
     // Player is rolling and holding dice.
     Rolling,
     // Player is choosing which category to score.
@@ -84,7 +88,8 @@ impl GamePhase {
     // If there is a cursor, then set it to the new value
     pub fn set_cursor(&mut self, new_cursor: usize) {
         match self {
-            Self::SelectingCategory { cursor, .. }
+            Self::MainMenu { cursor }
+            | Self::SelectingCategory { cursor, .. }
             | Self::Shop { cursor, .. }
             | Self::Rest { cursor }
             | Self::ChoosingRoom { cursor } => *cursor = new_cursor,
@@ -143,7 +148,7 @@ impl GameState {
             unlocked: vec![ScoreCategory::HighDie, ScoreCategory::Chance],
             used_this_room: vec![],
             relics: vec![],
-            phase: GamePhase::ChoosingRoom { cursor: 0 },
+            phase: GamePhase::MainMenu { cursor: 0 },
             base_rolls: 3,
         }
     }
