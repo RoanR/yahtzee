@@ -344,3 +344,94 @@ impl GameState {
             .map_or_else(|| false, |d| d.upgrade(upgrade))
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    fn game_phase_cursor() -> Vec<GamePhase> {
+        vec![
+            GamePhase::MainMenu { cursor: 1 },
+            GamePhase::SelectingCategory {
+                cursor: 1,
+                from_boss: true,
+            },
+            GamePhase::Shop {
+                items: vec![],
+                cursor: 1,
+            },
+            GamePhase::Rest { cursor: 1 },
+            GamePhase::ChoosingRoom { cursor: 1 },
+        ]
+    }
+
+    #[test]
+    fn test_get_set_cursor() {
+        let mut phases = game_phase_cursor();
+        phases.push(GamePhase::Rolling);
+
+        for mut phase in phases {
+            phase.set_cursor(0);
+            assert_eq!(phase.get_cursor(), 0);
+        }
+
+        let mut phase = GamePhase::ChoosingRoom { cursor: 0 };
+        phase.set_cursor(usize::MAX);
+        assert_eq!(phase.get_cursor(), usize::MAX);
+    }
+
+    #[test]
+    fn test_cycle_die_cursor() {
+        let mut phase = GamePhase::UpgradeSelectDie {
+            die_cursor: 0,
+            kind: UpgradeKind::Augment,
+            from_shop: true,
+            pending_die: None,
+        };
+
+        phase.cycle_die_cursor(isize::MAX, 0);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectDie { ref die_cursor, .. } if *die_cursor == 0)
+        );
+        phase.cycle_die_cursor(isize::MIN, 0);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectDie { ref die_cursor, .. } if *die_cursor == 0)
+        );
+        phase.cycle_die_cursor(isize::MAX, usize::MAX);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectDie { ref die_cursor, .. } if *die_cursor == 0)
+        );
+        phase.cycle_die_cursor(isize::MIN, usize::MAX);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectDie { ref die_cursor, .. } if *die_cursor == 0)
+        );
+    }
+
+    #[test]
+    fn test_cycle_face_cursor() {
+        let mut phase = GamePhase::UpgradeSelectFace {
+            die_index: 0,
+            face_cursor: 0,
+            kind: UpgradeKind::Augment,
+            from_shop: true,
+        };
+
+        phase.cycle_face_cursor(isize::MAX, 0);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectFace { ref face_cursor, .. } if *face_cursor == 0)
+        );
+        phase.cycle_face_cursor(isize::MIN, 0);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectFace { ref face_cursor, .. } if *face_cursor == 0)
+        );
+        phase.cycle_face_cursor(isize::MAX, usize::MAX);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectFace { ref face_cursor, .. } if *face_cursor == 0)
+        );
+        phase.cycle_face_cursor(isize::MIN, usize::MAX);
+        assert!(
+            matches!(phase, GamePhase::UpgradeSelectFace { ref face_cursor, .. } if *face_cursor == 0)
+        );
+    }
+}
