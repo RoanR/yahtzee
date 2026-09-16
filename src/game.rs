@@ -85,6 +85,18 @@ pub enum GamePhase {
 }
 
 impl GamePhase {
+    // If there is a cursor, then return it
+    pub fn get_cursor(&self) -> usize {
+        match self {
+            Self::MainMenu { cursor }
+            | Self::SelectingCategory { cursor, .. }
+            | Self::Shop { cursor, .. }
+            | Self::Rest { cursor }
+            | Self::ChoosingRoom { cursor } => *cursor,
+            _ => 0,
+        }
+    }
+
     // If there is a cursor, then set it to the new value
     pub fn set_cursor(&mut self, new_cursor: usize) {
         match self {
