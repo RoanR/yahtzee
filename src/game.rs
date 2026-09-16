@@ -111,21 +111,25 @@ impl GamePhase {
 
     // Cycle die_cursor by delta (wrapping) if currently in UpgradeSelectDie.
     pub fn cycle_die_cursor(&mut self, delta: isize, len: usize) {
-        if let Self::UpgradeSelectDie { die_cursor, .. } = self {
+        if let Self::UpgradeSelectDie { die_cursor, .. } = self
+            && len > 0
+        {
             *die_cursor = cycle(*die_cursor, delta, len);
         }
     }
 
     // Cycle face_cursor by delta (wrapping) if currently in UpgradeSelectFace.
     pub fn cycle_face_cursor(&mut self, delta: isize, len: usize) {
-        if let Self::UpgradeSelectFace { face_cursor, .. } = self {
+        if let Self::UpgradeSelectFace { face_cursor, .. } = self
+            && len > 0
+        {
             *face_cursor = cycle(*face_cursor, delta, len);
         }
     }
 }
 
 fn cycle(cur: usize, delta: isize, len: usize) -> usize {
-    ((cur as isize + delta).rem_euclid(len as isize)) as usize
+    (((cur as isize).wrapping_add(delta)).wrapping_rem_euclid(len as isize)) as usize
 }
 
 // ─── GameState ────────────────────────────────────────────────────────────────
